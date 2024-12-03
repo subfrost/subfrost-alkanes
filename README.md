@@ -2,7 +2,7 @@
 
 Implementation of a basic mintable asset on alkanes which can be minted either by an owner token or via protoburn of some asset on the runes metaprotocol.
 
-This could conceivably be used to create a stablecoin similar in design to USDC as it exists on Ethereum, but for alkanes, where you also have a ruens representation of the asset which you would honor.
+This could conceivably be used to create a stablecoin similar in design to USDC as it exists on Ethereum, but for alkanes, where you also have a runes representation of the asset which you would honor.
 
 Providing the ability to protoburn the runes representation of the stable on the runes metaprotocol is a mechanism by which you could trustlessly mediate transfer of the stablecoin value without relaying a transfer between the runes metaprotocol and alkanes with a centralized process.
 
