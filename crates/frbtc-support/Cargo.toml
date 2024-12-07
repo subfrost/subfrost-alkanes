@@ -1,0 +1,18 @@
+[package]
+name = "frbtc-support"
+version = "0.1.0"
+edition = "2021"
+description = "frBTC support library"
+repository = "https://github.com/subfrost/frBTC"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+alkanes-support = { git = "https:/github.com/kungfuflex/alkanes-rs" }
+alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
+metashrew-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
+anyhow = "1.0.94"
+bitcoin = { version = "0.32.4", features = ["rand"] }
