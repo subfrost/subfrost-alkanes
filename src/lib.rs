@@ -177,7 +177,7 @@ impl AlkaneResponder for SyntheticBitcoin {
         let mut inputs = context.inputs.clone();
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
         match shift(&mut inputs).unwrap() {
-            /* initialize(u128, u128, u128[2]) */
+            /* initialize(u128, u128) */
             0 => {
                 let mut pointer = StoragePointer::from_keyword("/initialized");
                 if pointer.get().len() == 0 {

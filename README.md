@@ -15,7 +15,7 @@ gzip compression level 9 is recommended to compress the wasm to a `*.wasm.gz` fi
 
 This alkane implements the following opcodes:
 
-- 0: `initialize(mint_auth_token_amount: u128, mint_amount: u128, rune_id_for_runes_stable: u128[2])`
+- 0: `initialize(mint_auth_token_amount: u128, mint_amount: u128)`
 - 77: `mint()`
 - 78: `burn(u128)`
 - 99: `name(): String`
