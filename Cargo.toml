@@ -1,5 +1,5 @@
 [package]
-name = "fr-btc"
+name = "frbtc"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,7 +15,7 @@ bellscoin = []
 fractal = []
 mainnet = []
 
-[workspaces]
+[workspace]
 members = ["crates/*", "."]
 
 [dependencies]
