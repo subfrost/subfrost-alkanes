@@ -98,8 +98,36 @@ impl MintableToken for SyntheticBitcoin {}
 impl AuthenticatedResponder for SyntheticBitcoin {}
 
 impl SyntheticBitcoin {
+  fn signer_pointer(&self) -> StoragePointer {
+    StoragePointer::from_keyword("/signer")
+  }
   fn signer(&self) -> Vec<u8> {
-    StoragePointer::from_keyword("/signer").get().as_ref().clone()
+    self.signer_pointer().get().as_ref().clone()
+  }
+  fn set_signer(&self, context: &Context, _vout: u32) -> Result<()> {
+    let vout = _vout as usize;
+    let tx = consensus_decode::<Transaction>(&mut std::io::Cursor::new(self.transaction()))?;
+    if let Some(Artifact::Runestone(ref runestone)) = Runestone::decipher(&tx) {
+      let protostones = Protostone::from_runestone(runestone)?;
+      let message = &protostones[(context.vout as usize) - tx.output.len() - 1];
+      if message.edicts.len() != 0 {
+        return Err(anyhow!("message cannot contain edicts, only a pointer"));
+      }
+      let pointer = message
+        .pointer
+        .ok_or("")
+        .map_err(|_| anyhow!("no pointer in message"))?;
+      if pointer as usize >= tx.output.len() {
+        return Err(anyhow!("pointer cannot be a protomessage"));
+      }
+      if pointer as usize == vout {
+        return Err(anyhow!("pointer cannot be equal to output spendable by synthetic"));
+      }
+      self.signer_pointer().set(Arc::new(tx.output[vout as usize].script_pubkey.as_bytes().to_vec()));
+      Ok(())
+    } else {
+      Err(anyhow!("unexpected condition: execution occurred with no Protostone present"))
+    }
   }
   fn observe_transaction(&self, tx: &Transaction) -> Result<()> {
     let mut ptr = StoragePointer::from_keyword("/seen/").select(&tx.compute_txid().as_byte_array().to_vec());
@@ -173,6 +201,7 @@ impl SyntheticBitcoin {
 
 impl AlkaneResponder for SyntheticBitcoin {
     fn execute(&self) -> CallResponse {
+        println!("{}", self.transaction().unwrap());
         let context = self.context().unwrap();
         let mut inputs = context.inputs.clone();
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
@@ -191,6 +220,12 @@ impl AlkaneResponder for SyntheticBitcoin {
                 } else {
                     panic!("already initialized");
                 }
+            },
+            1 => {
+                self.only_owner().unwrap();
+                self.set_signer(&context, shift(&mut inputs).unwrap().try_into().unwrap()).unwrap();
+                response.data = self.signer();
+                response
             }
             /* mint(u128) */
             77 => {
