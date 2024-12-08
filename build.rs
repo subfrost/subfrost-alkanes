@@ -86,7 +86,6 @@ fn main() {
         .clone()
         .into_iter()
         .filter_map(|name| {
-            let mut vars = env::vars_os();
             Some(name)
         })
         .collect::<Vec<String>>();

@@ -29,9 +29,12 @@ anyhow = "1.0.94"
 bitcoin = { version = "0.32.4", features = ["rand"] }
 
 [dev-dependencies]
-alkanes = { git = "https://github.com/kungfuflex/alkanes-rs" }
+alkanes = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
 metashrew = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
 protorune = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
+wasm-bindgen = "0.2.99"
+wasm-bindgen-test = "0.3.49"
+hex_lit = "0.1.1"
 
 [build-dependencies]
 anyhow = "1.0.90"

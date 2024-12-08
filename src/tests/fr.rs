@@ -8,9 +8,9 @@ use protorune::{balance_sheet::load_sheet, message::MessageContext, tables::Rune
 
 use protorune_support::utils::consensus_encode;
 
-use crate::index_block;
-use crate::tests::helpers as alkane_helpers;
-use crate::tests::std::alkanes_std_genesis_alkane_build;
+use alkanes::indexer::index_block;
+use alkanes::tests::helpers as alkane_helpers;
+use crate::tests::std::fr_btc_build;
 #[allow(unused_imports)]
 use metashrew::{get_cache, index_pointer::IndexPointer, println, stdio::stdout};
 use alkane_helpers::clear;
@@ -29,13 +29,14 @@ fn test_genesis() -> Result<()> {
     ]
     .into();
     let test_block = alkane_helpers::init_with_multiple_cellpacks_with_tx(
-        [fr_build::get_bytes(), vec![]].into(),
+        [fr_btc_build::get_bytes(), vec![]].into(),
         cellpacks,
     );
     let len = test_block.txdata.len();
     let outpoint = OutPoint {
         txid: test_block.txdata[len - 1].compute_txid(),
-        vout: 0,
+        vout: 0
+    };
     index_block(&test_block, block_height)?;
     let ptr = RuneTable::for_protocol(AlkaneMessageContext::protocol_tag())
         .OUTPOINT_TO_RUNES
