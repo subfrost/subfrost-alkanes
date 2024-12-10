@@ -229,7 +229,8 @@ impl AlkaneResponder for SyntheticBitcoin {
             }
             /* get_signer() -> String */
             100001 => {
-              response.data = to_address_str(Script::from_bytes(self.signer_pointer().get().as_ref())).ok_or("").map_err(|_| anyhow!("invalid script"))?.as_bytes().to_vec();
+              response.data = self.signer();
+/*              response.data = to_address_str(Script::from_bytes(self.signer_pointer().get().as_ref())).ok_or("").map_err(|_| anyhow!("invalid script"))?.as_bytes().to_vec(); */
               Ok(response)
             }
             /* mint(u128) */
