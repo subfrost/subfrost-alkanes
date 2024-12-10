@@ -6,13 +6,13 @@ use alkanes_runtime::{
 };
 use anyhow::{anyhow, Result};
 use alkanes_runtime::{runtime::AlkaneResponder, storage::StoragePointer};
-use alkanes_support::{id::AlkaneId, utils::{shift}};
+use alkanes_support::{id::AlkaneId, utils::{shift_or_err}};
 use alkanes_support::{context::Context, parcel::AlkaneTransfer, response::CallResponse};
 use metashrew_support::{utils::{consensus_decode}, compat::{to_arraybuffer_layout, to_passback_ptr}};
 use metashrew_support::index_pointer::KeyValuePointer;
-use protorune_support::{network::{NetworkParams},protostone::{Protostone},network::{set_network}};
+use protorune_support::{network::{to_address_str, NetworkParams, set_network},protostone::{Protostone}};
 use ordinals::{Runestone, Artifact};
-use bitcoin::{OutPoint, Amount, TxOut, Transaction};
+use bitcoin::{Script, OutPoint, Amount, TxOut, Transaction};
 use bitcoin::hashes::{Hash};
 use frbtc_support::{Payment};
 use std::sync::Arc;
@@ -200,59 +200,64 @@ impl SyntheticBitcoin {
 }
 
 impl AlkaneResponder for SyntheticBitcoin {
-    fn execute(&self) -> CallResponse {
-        println!("{}", self.transaction().unwrap());
-        let context = self.context().unwrap();
+    fn execute(&self) -> Result<CallResponse> {
+        configure_network();
+        let context = self.context()?;
         let mut inputs = context.inputs.clone();
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
-        match shift(&mut inputs).unwrap() {
+        match shift_or_err(&mut inputs)? {
             /* initialize(u128, u128) */
             0 => {
                 let mut pointer = StoragePointer::from_keyword("/initialized");
                 if pointer.get().len() == 0 {
-                    let auth_token_units = shift(&mut inputs).unwrap();
+                    let auth_token_units = shift_or_err(&mut inputs)?;
                     response
                         .alkanes
                         .0
-                        .push(self.deploy_auth_token(auth_token_units).unwrap());
+                        .push(self.deploy_auth_token(auth_token_units)?);
                     pointer.set(Arc::new(vec![0x01]));
-                    response
+                    Ok(response)
                 } else {
-                    panic!("already initialized");
+                    return Err(anyhow!("already initialized"));
                 }
             },
             1 => {
-                self.only_owner().unwrap();
-                self.set_signer(&context, shift(&mut inputs).unwrap().try_into().unwrap()).unwrap();
+                self.only_owner()?;
+                self.set_signer(&context, shift_or_err(&mut inputs)?.try_into()?)?;
                 response.data = self.signer();
-                response
+                Ok(response)
+            }
+            /* get_signer() -> String */
+            100001 => {
+              response.data = to_address_str(Script::from_bytes(self.signer_pointer().get().as_ref())).ok_or("").map_err(|_| anyhow!("invalid script"))?.as_bytes().to_vec();
+              Ok(response)
             }
             /* mint(u128) */
             77 => {
-                response.alkanes.0.push(self.exchange(&context).unwrap());
-                response
+                response.alkanes.0.push(self.exchange(&context)?);
+                Ok(response)
             }
             78 => {
                 if context.caller.clone() != (AlkaneId { tx: 0, block: 0 }) {
-                  panic!("must be called by EOA");
+                  return Err(anyhow!("must be called by EOA"));
                 }
                 if context.incoming_alkanes.0.len() != 1 {
-                  panic!("must only send synthetics as input alkanes")
+                  return Err(anyhow!("must only send synthetics as input alkanes"));
                 }
-                let burn_value = self.burn(&context, shift(&mut inputs).unwrap().try_into().unwrap()).unwrap();
+                let burn_value = self.burn(&context, shift_or_err(&mut inputs)?.try_into()?)?;
                 let mut burn_response = CallResponse::default();
                 burn_response.data = burn_value.to_le_bytes().to_vec();
-                burn_response
+                Ok(burn_response)
             }
             /* name() */
             99 => {
                 response.data = self.name().into_bytes().to_vec();
-                response
+                Ok(response)
             }
             /* symbol() */
             100 => {
                 response.data = self.symbol().into_bytes().to_vec();
-                response
+                Ok(response)
             }
             /* payments_at_height */
             1001 => {
@@ -263,7 +268,7 @@ impl AlkaneResponder for SyntheticBitcoin {
                   result.extend(v.as_ref());
                   result
                 });
-                payments
+                Ok(payments)
             }
             _ => {
                 panic!("unrecognized opcode");

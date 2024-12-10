@@ -32,7 +32,7 @@ dependencies = [
 [[package]]
 name = "alkanes"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#43acd43df66d5dfb3374391f77ff39f143a7675a"
+source = "git+https://github.com/kungfuflex/alkanes-rs#26d8bd87d867b8b35029c49d80d9e4f25da5ce1c"
 dependencies = [
  "alkanes-support",
  "anyhow",
@@ -64,7 +64,7 @@ dependencies = [
 [[package]]
 name = "alkanes-runtime"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#43acd43df66d5dfb3374391f77ff39f143a7675a"
+source = "git+https://github.com/kungfuflex/alkanes-rs#26d8bd87d867b8b35029c49d80d9e4f25da5ce1c"
 dependencies = [
  "alkanes-support",
  "anyhow",
@@ -77,7 +77,7 @@ dependencies = [
 [[package]]
 name = "alkanes-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#43acd43df66d5dfb3374391f77ff39f143a7675a"
+source = "git+https://github.com/kungfuflex/alkanes-rs#26d8bd87d867b8b35029c49d80d9e4f25da5ce1c"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.5",
@@ -469,9 +469,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.38"
+version = "0.4.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
+checksum = "7e36cc9d416881d2e24f9a963be5fb1cd90966419ac844274161d10488b3e825"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
@@ -941,9 +941,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.167"
+version = "0.2.168"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09d6582e104315a817dff97f75133544b2e094ee22447d2acf4a74e189ba06fc"
+checksum = "5aaeb2981e0606ca11d79718f8bb01164f1d6ed75080182d3abf017e6d244b6d"
 
 [[package]]
 name = "libm"
@@ -972,7 +972,7 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 [[package]]
 name = "metashrew"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#43acd43df66d5dfb3374391f77ff39f143a7675a"
+source = "git+https://github.com/kungfuflex/alkanes-rs#26d8bd87d867b8b35029c49d80d9e4f25da5ce1c"
 dependencies = [
  "anyhow",
  "bitcoin 0.31.2",
@@ -992,7 +992,7 @@ dependencies = [
 [[package]]
 name = "metashrew-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#43acd43df66d5dfb3374391f77ff39f143a7675a"
+source = "git+https://github.com/kungfuflex/alkanes-rs#26d8bd87d867b8b35029c49d80d9e4f25da5ce1c"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1127,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "ordinals"
 version = "0.0.10"
-source = "git+https://github.com/kungfuflex/alkanes-rs#43acd43df66d5dfb3374391f77ff39f143a7675a"
+source = "git+https://github.com/kungfuflex/alkanes-rs#26d8bd87d867b8b35029c49d80d9e4f25da5ce1c"
 dependencies = [
  "bitcoin 0.32.5",
  "derive_more 1.0.0",
@@ -1387,7 +1387,7 @@ dependencies = [
 [[package]]
 name = "protorune"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#43acd43df66d5dfb3374391f77ff39f143a7675a"
+source = "git+https://github.com/kungfuflex/alkanes-rs#26d8bd87d867b8b35029c49d80d9e4f25da5ce1c"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.5",
@@ -1409,7 +1409,7 @@ dependencies = [
 [[package]]
 name = "protorune-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#43acd43df66d5dfb3374391f77ff39f143a7675a"
+source = "git+https://github.com/kungfuflex/alkanes-rs#26d8bd87d867b8b35029c49d80d9e4f25da5ce1c"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1573,15 +1573,15 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.41"
+version = "0.38.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7f649912bc1495e167a6edee79151c84b1bad49748cb4f1f1167f459f6224f6"
+checksum = "f93dc38ecbab2eb790ff964bb77fa94faf256fd3e73285fd7ba0903b76bedb85"
 dependencies = [
  "bitflags",
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
