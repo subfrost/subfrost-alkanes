@@ -185,7 +185,7 @@ impl SyntheticBitcoin {
           txid,
           vout: vout.try_into()?
         }
-      }).serialize()));
+      }).serialize()?));
       Ok(value)
     } else {
       Err(anyhow!("execution triggered unexpectedly -- no protostone"))

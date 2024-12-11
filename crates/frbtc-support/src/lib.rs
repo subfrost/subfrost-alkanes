@@ -10,13 +10,13 @@ pub struct Payment {
 }
 
 impl Payment {
-  pub fn serialize(&self) -> Vec<u8> {
+  pub fn serialize(&self) -> Result<Vec<u8>> {
     let mut result: Vec<u8> = vec![];
-    let spendable: Vec<u8> = consensus_encode(&self.spendable).unwrap();
-    let output: Vec<u8> = consensus_encode(&self.output).unwrap();
+    let spendable: Vec<u8> = consensus_encode::<OutPoint>(&self.spendable)?;
+    let output: Vec<u8> = consensus_encode::<TxOut>(&self.output)?;
     result.extend(&spendable);
     result.extend(&output);
-    result
+    Ok(result)
   }
 }
 
