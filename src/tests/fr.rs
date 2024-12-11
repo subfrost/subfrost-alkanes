@@ -134,6 +134,58 @@ fn set_signer(inputs: Vec<OutPoint>) -> Transaction {
   }
 }
 
+fn burn(inputs: Vec<OutPoint>) -> Transaction {
+  let protostone: Protostone = Protostone {
+    burn: None,
+    edicts: vec![],
+    pointer: Some(0),
+    refund: Some(2),
+    from: None,
+    protocol_tag: AlkaneMessageContext::protocol_tag(),
+    message: (Cellpack {
+      target: AlkaneId {
+        block: 4,
+        tx: 0
+      },
+      inputs: vec![78, 1]
+    }).encipher(),
+  };
+  let runestone: ScriptBuf = (Runestone {
+    etching: None,
+    pointer: Some(0), // points to the OP_RETURN, so therefore targets the protoburn
+    edicts: Vec::new(),
+    mint: None,
+    protocol: vec![protostone].encipher().ok(),
+  }).encipher();
+  let op_return = TxOut {
+    value: Amount::from_sat(0),
+    script_pubkey: runestone,
+  };
+  let address: Address<NetworkChecked> = get_address(ADDRESS1);
+  let _script_pubkey = address.script_pubkey();
+  Transaction {
+    version: bitcoin::blockdata::transaction::Version::ONE,
+    lock_time: bitcoin::absolute::LockTime::ZERO,
+    input: inputs.into_iter().map(|v| TxIn {
+      previous_output: v,
+      witness: Witness::new(),
+      script_sig: ScriptBuf::new(),
+      sequence: Sequence::MAX
+    }).collect::<Vec<TxIn>>(),
+    output: vec![
+      TxOut {
+        value: Amount::from_sat(546),
+        script_pubkey: get_address(ADDRESS1).script_pubkey()
+      },
+      TxOut {
+        value: Amount::from_sat(546),
+        script_pubkey: get_address(TEST_MULTISIG).script_pubkey()
+      },
+      op_return
+    ]
+  }
+}
+
 #[wasm_bindgen_test]
 fn test_synthetic_init() -> Result<()> {
     clear();
@@ -202,5 +254,13 @@ fn test_synthetic_init() -> Result<()> {
     */
     let sheet2 = load_sheet(&ptr);
     println!("balances at end {:?}", sheet2);
+    test_block = alkane_helpers::init_with_multiple_cellpacks_with_tx(vec![], vec![]);
+    test_block.txdata.push(burn(vec![outpoint2]));
+    block_height = block_height + 1;
+    index_block(&test_block, block_height)?;
+    println!("{}", hex::encode(IndexPointer::from_keyword("/alkanes/").select(&(AlkaneId {
+      block: 4,
+      tx: 0
+    }).into()).keyword("/storage/").keyword("/payments/byheight/").select_value::<u64>(block_height.into()).get().as_ref().clone()));
     Ok(())
 }
