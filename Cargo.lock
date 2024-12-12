@@ -32,7 +32,7 @@ dependencies = [
 [[package]]
 name = "alkanes"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#058147a6ce21ab5e7c79592c6b2c4038f7a71645"
+source = "git+https://github.com/kungfuflex/alkanes-rs#91912fe6d163794b5f5821be938c425bef23d851"
 dependencies = [
  "alkanes-support",
  "anyhow",
@@ -64,7 +64,7 @@ dependencies = [
 [[package]]
 name = "alkanes-runtime"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#058147a6ce21ab5e7c79592c6b2c4038f7a71645"
+source = "git+https://github.com/kungfuflex/alkanes-rs#91912fe6d163794b5f5821be938c425bef23d851"
 dependencies = [
  "alkanes-support",
  "anyhow",
@@ -77,7 +77,7 @@ dependencies = [
 [[package]]
 name = "alkanes-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#058147a6ce21ab5e7c79592c6b2c4038f7a71645"
+source = "git+https://github.com/kungfuflex/alkanes-rs#91912fe6d163794b5f5821be938c425bef23d851"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.5",
@@ -972,7 +972,7 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 [[package]]
 name = "metashrew"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#058147a6ce21ab5e7c79592c6b2c4038f7a71645"
+source = "git+https://github.com/kungfuflex/alkanes-rs#91912fe6d163794b5f5821be938c425bef23d851"
 dependencies = [
  "anyhow",
  "bitcoin 0.31.2",
@@ -992,7 +992,7 @@ dependencies = [
 [[package]]
 name = "metashrew-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#058147a6ce21ab5e7c79592c6b2c4038f7a71645"
+source = "git+https://github.com/kungfuflex/alkanes-rs#91912fe6d163794b5f5821be938c425bef23d851"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1127,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "ordinals"
 version = "0.0.10"
-source = "git+https://github.com/kungfuflex/alkanes-rs#058147a6ce21ab5e7c79592c6b2c4038f7a71645"
+source = "git+https://github.com/kungfuflex/alkanes-rs#91912fe6d163794b5f5821be938c425bef23d851"
 dependencies = [
  "bitcoin 0.32.5",
  "derive_more 1.0.0",
@@ -1387,7 +1387,7 @@ dependencies = [
 [[package]]
 name = "protorune"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#058147a6ce21ab5e7c79592c6b2c4038f7a71645"
+source = "git+https://github.com/kungfuflex/alkanes-rs#91912fe6d163794b5f5821be938c425bef23d851"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.5",
@@ -1409,7 +1409,7 @@ dependencies = [
 [[package]]
 name = "protorune-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#058147a6ce21ab5e7c79592c6b2c4038f7a71645"
+source = "git+https://github.com/kungfuflex/alkanes-rs#91912fe6d163794b5f5821be938c425bef23d851"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1690,18 +1690,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.215"
+version = "1.0.216"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6513c1ad0b11a9376da888e3e0baa0077f1aed55c17f50e7b2397136129fb88f"
+checksum = "0b9781016e935a97e8beecf0c933758c97a5520d32930e460142b4cd80c6338e"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.215"
+version = "1.0.216"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad1e866f866923f252f05c889987993144fb74e722403468a4ebd70c3cd756c0"
+checksum = "46f859dbbf73865c6627ed570e78961cd3ac92407a2d117204c49232485da55e"
 dependencies = [
  "proc-macro2",
  "quote",
