@@ -1,0 +1,20 @@
+[package]
+name = "merkle-distributor"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+alkanes-support = { git = "https:/github.com/kungfuflex/alkanes-rs" }
+alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
+metashrew-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+alkane-factory-support = { path = "../../crates/alkane-factory-support" }
+ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
+anyhow = "1.0.91"
+bitcoin = { version = "0.32.4", features = ["rand"] }
+num = "0.4.3"
+rs_merkle = "1.4.2"
+ruint = "1.12.3"

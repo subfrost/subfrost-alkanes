@@ -1,5 +1,6 @@
 use alkanes::message::AlkaneMessageContext;
 use alkanes_support::id::AlkaneId;
+use alkanes_support::envelope::RawEnvelope;
 use anyhow::Result;
 use bitcoin::blockdata::transaction::OutPoint;
 use bitcoin::address::{NetworkChecked};
@@ -144,64 +145,103 @@ fn set_signer(inputs: Vec<OutPoint>) -> Transaction {
 #[wasm_bindgen_test]
 fn test_synthetic_init() -> Result<()> {
     clear();
-    let mut block_height = 850_000;
+    let mut block_height = 840_000;
+    
+    // Initialize cellpacks for auth token factory and fr_btc
     let cellpacks: Vec<Cellpack> = [
-        //auth token factory init
+        // Auth token factory init
         Cellpack {
             target: AlkaneId { block: 3, tx: AUTH_TOKEN_FACTORY_ID },
             inputs: vec![100]
         },
+        // fr_btc init with initial balance
         Cellpack {
             target: AlkaneId { block: 3, tx: 0 },
-            inputs: vec![0, 1],
+            inputs: vec![0, 1000000000], // Add initial balance
         }
     ]
     .into();
     
-    // Get the binary data for the cellpacks
-    let binary_data = fr_btc_build::get_bytes();
+    // Get the binary data and create raw envelopes
+    let auth_token_binary = alkanes_std_auth_token_build::get_bytes();
+    let fr_btc_binary = fr_btc_build::get_bytes();
     
+    let auth_token_envelope = RawEnvelope::from(auth_token_binary.clone());
+    let fr_btc_envelope = RawEnvelope::from(fr_btc_binary.clone());
+    
+    // Create gzipped witness data
+    let auth_token_witness = auth_token_envelope.to_gzipped_witness();
+    let fr_btc_witness = fr_btc_envelope.to_gzipped_witness();
+    
+    // Initialize first block with auth token factory and fr_btc
     let mut test_block = alkane_helpers::init_with_multiple_cellpacks_with_tx(
-        [alkanes_std_auth_token_build::get_bytes(), binary_data.clone()].into(),
+        [auth_token_binary, fr_btc_binary].into(),
         cellpacks,
     );
     
     // Add witness data to the test block transactions
-    for tx in test_block.txdata.iter_mut() {
+    for (i, tx) in test_block.txdata.iter_mut().enumerate() {
         for input in tx.input.iter_mut() {
-            input.witness = Witness::from_slice(&[binary_data.clone()]);
+            input.witness = if i == 0 {
+                auth_token_witness.clone()
+            } else {
+                fr_btc_witness.clone()
+            };
         }
     }
     
+    // Index the first block
+    index_block(&test_block, block_height)?;
+    
+    // Get the outpoint from the fr_btc initialization transaction
     let len = test_block.txdata.len();
     let outpoint = OutPoint {
         txid: test_block.txdata[len - 1].compute_txid(),
         vout: 0
     };
-    index_block(&test_block, block_height)?;
-    let ptr = RuneTable::for_protocol(AlkaneMessageContext::protocol_tag())
+    
+    // Get and verify initial balance sheet
+    let protocol_tag = AlkaneMessageContext::protocol_tag();
+    let ptr = RuneTable::for_protocol(protocol_tag)
         .OUTPOINT_TO_RUNES
         .select(&consensus_encode(&outpoint)?);
-    
-    // Load and verify initial balance sheet
     let initial_sheet = load_sheet(&ptr);
     println!("initial balances {:?}", initial_sheet);
     
-    test_block = alkane_helpers::init_with_multiple_cellpacks_with_tx(vec![], vec![]);
-    test_block.txdata.push(set_signer(vec![outpoint.clone()]));
-    test_block.txdata.push(pay_to_musig(vec![], 500_000_000));
-    block_height = block_height + 1;
+    // Create second block with signer and payment transactions
+    block_height += 1;
+    let mut second_block = alkane_helpers::init_with_multiple_cellpacks_with_tx(vec![], vec![]);
     
-    let len2 = test_block.txdata.len();
+    // Add signer transaction with previous output
+    let mut signer_tx = set_signer(vec![outpoint.clone()]);
+    for input in signer_tx.input.iter_mut() {
+        input.witness = fr_btc_witness.clone();
+    }
+    second_block.txdata.push(signer_tx.clone());
+    
+    // Add payment transaction with previous output
+    let signer_outpoint = OutPoint {
+        txid: signer_tx.compute_txid(),
+        vout: 0
+    };
+    let mut payment_tx = pay_to_musig(vec![signer_outpoint], 500_000_000);
+    for input in payment_tx.input.iter_mut() {
+        input.witness = fr_btc_witness.clone();
+    }
+    second_block.txdata.push(payment_tx);
+    
+    // Index the second block
+    index_block(&second_block, block_height)?;
+    
+    // Get and verify final balance sheet
+    let len2 = second_block.txdata.len();
     let outpoint2 = OutPoint {
-        txid: test_block.txdata[len2 - 1].compute_txid(),
+        txid: second_block.txdata[len2 - 1].compute_txid(),
         vout: 1
     };
-    index_block(&test_block, block_height)?;
-    let ptr = RuneTable::for_protocol(AlkaneMessageContext::protocol_tag())
+    let ptr = RuneTable::for_protocol(protocol_tag)
         .OUTPOINT_TO_RUNES
         .select(&consensus_encode(&outpoint2)?);
-    
     let final_sheet = load_sheet(&ptr);
     println!("balances at end {:?}", final_sheet);
     
