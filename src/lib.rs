@@ -36,9 +36,39 @@ pub mod alkanes {
                 }
             }
 
+            // Calculate shares based on deposit amount and current vault state
+            fn calculate_shares(&self, deposit_amount: u64) -> u64 {
+                let total_supply = *self.total_supply.borrow();
+                let total_deposits = *self.total_deposits.borrow();
+
+                if total_supply == 0 || total_deposits == 0 {
+                    // First deposit gets 1:1 shares
+                    deposit_amount
+                } else {
+                    // Calculate shares based on the proportion of the total vault value
+                    // shares = deposit_amount * total_supply / total_deposits
+                    ((deposit_amount as u128 * total_supply as u128) / total_deposits as u128) as u64
+                }
+            }
+
+            // Calculate withdrawal amount based on shares
+            fn calculate_withdrawal_amount(&self, shares_amount: u64) -> u64 {
+                let total_supply = *self.total_supply.borrow();
+                let total_deposits = *self.total_deposits.borrow();
+
+                if total_supply == 0 || total_deposits == 0 {
+                    shares_amount
+                } else {
+                    // withdrawal_amount = shares * total_deposits / total_supply
+                    ((shares_amount as u128 * total_deposits as u128) / total_supply as u128) as u64
+                }
+            }
+
             pub fn deposit(&self, amount: u64, sender: Vec<u8>) -> Result<AlkaneTransfer> {
                 let context = self.context()?;
-                let mint_amount = amount; // 1:1 ratio for simplicity
+                
+                // Calculate shares for the deposit amount
+                let mint_amount = self.calculate_shares(amount);
                 
                 // Get current shares first
                 let current_shares = {
@@ -80,8 +110,8 @@ pub mod alkanes {
                     return Err(anyhow!("insufficient shares"));
                 }
 
-                // Calculate withdrawal amount (1:1 ratio for simplicity)
-                let withdrawal_amount = shares_amount;
+                // Calculate withdrawal amount based on shares
+                let withdrawal_amount = self.calculate_withdrawal_amount(shares_amount);
                 if withdrawal_amount == 0 {
                     return Err(anyhow!("zero withdrawal amount"));
                 }

@@ -216,4 +216,138 @@ mod tests {
         println!("====== Multiple Users Deposit and Withdraw Test Complete ======\n");
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn test_vault_share_calculation() -> Result<()> {
+        println!("\n====== Running Vault Share Calculation Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        // First user gets 1:1 shares (1000 shares for 1000 tokens)
+        let user1 = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        println!("\n>>> First user depositing");
+        println!("Amount: 1000");
+        println!("Address: {:02x?}", user1);
+        
+        let transfer = token.deposit(1000, user1.clone())?;
+        println!("First deposit completed. Transfer result: {:?}", transfer);
+        print_token_state(&token, "After First Deposit");
+        print_user_balance(&token, &user1, "User 1");
+        assert_eq!(token.get_shares(&user1), 1000, "First user should get 1:1 shares");
+
+        // Simulate value increase: total_deposits = 1000, total_supply = 1000
+        // Second user deposits same amount but gets fewer shares due to increased value
+        let user2 = vec![2, 0, 0, 0, 0, 0, 0, 0];
+        println!("\n>>> Second user depositing same amount after value increase");
+        println!("Amount: 1000");
+        println!("Address: {:02x?}", user2);
+        
+        let transfer = token.deposit(1000, user2.clone())?;
+        println!("Second deposit completed. Transfer result: {:?}", transfer);
+        print_token_state(&token, "After Second Deposit");
+        print_user_balance(&token, &user2, "User 2");
+        
+        // Verify share calculations
+        let user2_shares = token.get_shares(&user2);
+        println!("\n>>> Share distribution analysis:");
+        println!("User 1 shares: 1000 (from 1000 token deposit)");
+        println!("User 2 shares: {} (from 1000 token deposit)", user2_shares);
+        println!("Total supply: {}", token.total_supply.borrow());
+        println!("Total deposits: {}", token.total_deposits.borrow());
+
+        // Third user deposits with double the amount
+        let user3 = vec![3, 0, 0, 0, 0, 0, 0, 0];
+        println!("\n>>> Third user depositing double amount");
+        println!("Amount: 2000");
+        println!("Address: {:02x?}", user3);
+        
+        let transfer = token.deposit(2000, user3.clone())?;
+        println!("Third deposit completed. Transfer result: {:?}", transfer);
+        print_token_state(&token, "After Third Deposit");
+        print_user_balance(&token, &user3, "User 3");
+
+        // Verify proportional share distribution
+        println!("\n>>> Final share distribution:");
+        println!("User 1: {} shares", token.get_shares(&user1));
+        println!("User 2: {} shares", token.get_shares(&user2));
+        println!("User 3: {} shares", token.get_shares(&user3));
+        
+        // Test withdrawal with updated value
+        println!("\n>>> Testing withdrawal with updated value");
+        let user1_shares = token.get_shares(&user1);
+        let (shares_transfer, token_transfer) = token.withdraw(user1_shares, user1.clone())?;
+        println!("User 1 withdrawal result:");
+        println!("Shares burned: {}", shares_transfer.value);
+        println!("Tokens returned: {}", token_transfer.value);
+        print_token_state(&token, "After Withdrawal");
+
+        println!("====== Vault Share Calculation Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_share_calculation_with_appreciation() -> Result<()> {
+        println!("\n====== Running Share Calculation with Appreciation Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        // First user deposits 1000 tokens when vault is empty
+        let user1 = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        println!("\n>>> First user depositing 1000 tokens");
+        let _transfer = token.deposit(1000, user1.clone())?;
+        print_token_state(&token, "After First Deposit");
+        print_user_balance(&token, &user1, "User 1");
+        
+        // Verify first user gets 1:1 shares
+        assert_eq!(token.get_shares(&user1), 1000, "First user should get 1000 shares for 1000 tokens");
+        
+        // Simulate vault appreciation: total_deposits stays 1000, but value is now 2000
+        // We do this by manually updating total_deposits
+        *token.total_deposits.borrow_mut() = 2000;
+        println!("\n>>> Simulating vault appreciation");
+        println!("Original deposits: 1000");
+        println!("New vault value: 2000");
+        print_token_state(&token, "After Value Appreciation");
+
+        // Second user deposits same amount (1000) after appreciation
+        let user2 = vec![2, 0, 0, 0, 0, 0, 0, 0];
+        println!("\n>>> Second user depositing 1000 tokens after appreciation");
+        let _transfer = token.deposit(1000, user2.clone())?;
+        print_token_state(&token, "After Second Deposit");
+        print_user_balance(&token, &user2, "User 2");
+        
+        // Second user should get fewer shares for same deposit
+        let user2_shares = token.get_shares(&user2);
+        println!("\n>>> Share Analysis:");
+        println!("User 1: 1000 shares for 1000 tokens (at vault value 1000)");
+        println!("User 2: {} shares for 1000 tokens (at vault value 2000)", user2_shares);
+        assert!(user2_shares < 1000, "Second user should get fewer shares due to appreciation");
+        
+        // Calculate expected shares for second user:
+        // shares = deposit_amount * total_supply / total_deposits
+        // shares = 1000 * 1000 / 2000 = 500
+        assert_eq!(user2_shares, 500, "Second user should get 500 shares for 1000 tokens");
+
+        // Verify withdrawal amounts
+        println!("\n>>> Testing withdrawals after appreciation");
+        
+        // User 1 withdraws all shares
+        let (_shares_transfer1, token_transfer1) = token.withdraw(1000, user1.clone())?;
+        println!("User 1 withdrawal (1000 shares):");
+        println!("Tokens returned: {}", token_transfer1.value);
+        
+        // User 2 withdraws all shares
+        let (_shares_transfer2, token_transfer2) = token.withdraw(user2_shares, user2.clone())?;
+        println!("User 2 withdrawal ({} shares):", user2_shares);
+        println!("Tokens returned: {}", token_transfer2.value);
+        
+        // Verify proportional withdrawal amounts
+        // User 1 (1000 shares) should get 2000 tokens (2/3 of the vault)
+        // User 2 (500 shares) should get 1000 tokens (1/3 of the vault)
+        assert_eq!(token_transfer1.value, 2000, "User 1 should get 2000 tokens for 1000 shares");
+        assert_eq!(token_transfer2.value, 1000, "User 2 should get 1000 tokens for 500 shares");
+
+        println!("====== Share Calculation with Appreciation Test Complete ======\n");
+        Ok(())
+    }
 } 
