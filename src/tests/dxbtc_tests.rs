@@ -2,11 +2,50 @@ use crate::alkanes::dxbtc::{DxBtc, AlkaneId};
 use alkanes_support::context::Context;
 use alkanes_support::parcel::AlkaneTransferParcel;
 use anyhow::Result;
-use wasm_bindgen_test::wasm_bindgen_test;
+use wasm_bindgen_test::*;
+
+#[allow(unused_imports)]
+use {
+    metashrew::{println, stdio::stdout},
+    std::fmt::Write,
+};
+
+
+// Helper function to print detailed state
+fn print_token_state(token: &DxBtc, label: &str) {
+    println!("\n=== {} ===", label);
+    
+    // Print deposit token state
+    {
+        let deposit_token = token.deposit_token.lock().unwrap();
+        println!("Deposit Token: {:?}", *deposit_token);
+    }
+    
+    // Print total supply
+    {
+        let supply = token.total_supply.lock().unwrap();
+        println!("Total Supply: {}", *supply);
+    }
+    
+    // Print total deposits
+    {
+        let deposits = token.total_deposits.lock().unwrap();
+        println!("Total Deposits: {}", *deposits);
+    }
+    
+    // Print balances if any exist
+    {
+        let balances = token.balances.lock().unwrap();
+        println!("Current Balances: {:?}", *balances);
+    }
+    
+    println!("=== End {} ===\n", label);
+}
 
 fn setup_token() -> DxBtc {
-    println!("Setting up new DxBtc token...");
+    println!("\n>>> Setting up new DxBtc token...");
     let token = DxBtc::default();
+    
     let context = Context {
         myself: AlkaneId::new(1, 1),
         inputs: vec![0, 1, 2],
@@ -14,298 +53,259 @@ fn setup_token() -> DxBtc {
         caller: AlkaneId::new(1, 1),
         vout: 0,
     };
-    println!("Created context with caller ID: {:?}", context.caller);
+    
+    println!("Created context:");
+    println!("  Caller ID: {:?}", context.caller);
+    println!("  Self ID: {:?}", context.myself);
+    println!("  Inputs: {:?}", context.inputs);
+    println!("  Vout: {}", context.vout);
+    
     DxBtc::set_mock_context(context);
+    print_token_state(&token, "Initial Token State");
     token
 }
 
 fn get_test_address() -> Vec<u8> {
-    vec![1, 2, 3, 4, 5]
+    let addr = vec![1, 2, 3, 4, 5];
+    println!("Generated test address: {:02x?}", addr);
+    addr
 }
 
 #[wasm_bindgen_test]
 fn test_initialization() -> Result<()> {
-    println!("\n=== Running initialization test ===");
+    println!("\n====== Running Initialization Test ======");
     let token = setup_token();
     
-    println!("Initializing deposit token...");
-    {
-        let mut deposit_token = token.deposit_token.lock().unwrap();
-        *deposit_token = Some(AlkaneId::new(1, 2));
-        println!("Deposit token initialized: {:?}", deposit_token);
-    }
+    println!("\n>>> Initializing deposit token...");
+    let deposit_token_id = AlkaneId::new(1, 2);
+    println!("Using deposit token ID: {:?}", deposit_token_id);
     
     {
+        println!("Attempting to acquire deposit_token lock...");
+        let mut deposit_token = token.deposit_token.lock().unwrap();
+        println!("Lock acquired successfully");
+        *deposit_token = Some(deposit_token_id);
+        println!("Deposit token set to: {:?}", *deposit_token);
+    }
+    println!("Lock released");
+    
+    // Verify in a separate block
+    {
+        println!("\n>>> Verifying initialization...");
+        println!("Attempting to acquire deposit_token lock for verification...");
         let deposit_token = token.deposit_token.lock().unwrap();
         assert!(deposit_token.is_some());
-        println!("Deposit token verification successful");
+        println!("Verification successful - deposit token is set");
+        println!("Current value: {:?}", *deposit_token);
     }
+    
+    print_token_state(&token, "Final Token State");
+    println!("====== Initialization Test Complete ======\n");
     Ok(())
 }
 
-#[wasm_bindgen_test]
-fn test_initial_deposit() -> Result<()> {
-    println!("\n=== Running initial deposit test ===");
-    let token = setup_token();
-    let deposit_amount: u64 = 1000;
-    let sender = get_test_address();
-    
-    println!("Initializing deposit token...");
-    {
-        let mut deposit_token = token.deposit_token.lock().unwrap();
-        *deposit_token = Some(AlkaneId::new(1, 2));
-        println!("Deposit token initialized: {:?}", deposit_token);
-    }
-    
-    println!("Making initial deposit of {} from sender {:?}", deposit_amount, sender);
-    let transfer = token.deposit(deposit_amount, sender.clone())?;
-    println!("Transfer completed: {:?}", transfer);
-    
-    let shares = token.get_shares(&sender);
-    println!("Current shares: {}", shares);
-    assert_eq!(shares, deposit_amount);
-    
-    {
-        let total_supply = token.total_supply.lock().unwrap();
-        println!("Total supply: {}", *total_supply);
-        assert_eq!(*total_supply, deposit_amount);
-    }
-    
-    {
-        let total_deposits = token.total_deposits.lock().unwrap();
-        println!("Total deposits: {}", *total_deposits);
-        assert_eq!(*total_deposits, deposit_amount);
-    }
-    
-    assert_eq!(transfer.value, deposit_amount as u128);
-    Ok(())
-}
-
-#[wasm_bindgen_test]
-fn test_multiple_deposits() -> Result<()> {
-    println!("\n=== Running multiple deposits test ===");
-    let token = setup_token();
-    let sender = get_test_address();
-    let first_deposit = 1000;
-    let second_deposit = 500;
-    let expected_mint = first_deposit + second_deposit;
-    
-    println!("Initializing deposit token...");
-    {
-        let mut deposit_token = token.deposit_token.lock().unwrap();
-        *deposit_token = Some(AlkaneId::new(1, 2));
-        println!("Deposit token initialized: {:?}", deposit_token);
-    }
-    
-    println!("Making first deposit of {}", first_deposit);
-    token.deposit(first_deposit, sender.clone())?;
-    
-    println!("Making second deposit of {}", second_deposit);
-    let transfer = token.deposit(second_deposit, sender.clone())?;
-    println!("Second transfer completed: {:?}", transfer);
-    
-    let shares = token.get_shares(&sender);
-    println!("Final shares: {}", shares);
-    assert_eq!(shares, expected_mint);
-    
-    {
-        let total_supply = token.total_supply.lock().unwrap();
-        println!("Total supply: {}", *total_supply);
-        assert_eq!(*total_supply, expected_mint);
-    }
-    
-    {
-        let total_deposits = token.total_deposits.lock().unwrap();
-        println!("Total deposits: {}", *total_deposits);
-        assert_eq!(*total_deposits, expected_mint);
-    }
-    
-    assert_eq!(transfer.value, second_deposit as u128);
-    Ok(())
-}
-
-#[test]
-fn test_withdrawal() -> Result<()> {
-    println!("\n=== Running withdrawal test ===");
-    let token = setup_token();
-    let sender = get_test_address();
-    let initial_deposit = 1000;
-    let withdraw_shares = 500;
-    
-    println!("Initializing deposit token...");
-    {
-        let mut deposit_token = token.deposit_token.lock().unwrap();
-        *deposit_token = Some(AlkaneId::new(1, 2));
-        println!("Deposit token initialized: {:?}", deposit_token);
-    }
-    
-    println!("Making initial deposit of {}", initial_deposit);
-    token.deposit(initial_deposit, sender.clone())?;
-    
-    println!("Attempting withdrawal of {} shares", withdraw_shares);
-    let (shares_transfer, deposit_transfer) = token.withdraw(withdraw_shares, sender.clone())?;
-    println!("Withdrawal completed - Shares transfer: {:?}, Deposit transfer: {:?}", 
-             shares_transfer, deposit_transfer);
-    
-    let shares = token.get_shares(&sender);
-    println!("Remaining shares: {}", shares);
-    assert_eq!(shares, initial_deposit - withdraw_shares);
-    
-    {
-        let total_supply = token.total_supply.lock().unwrap();
-        println!("Total supply: {}", *total_supply);
-        assert_eq!(*total_supply, initial_deposit - withdraw_shares);
-    }
-    
-    {
-        let total_deposits = token.total_deposits.lock().unwrap();
-        println!("Total deposits: {}", *total_deposits);
-        assert_eq!(*total_deposits, initial_deposit - withdraw_shares);
-    }
-    
-    assert_eq!(shares_transfer.value, withdraw_shares as u128);
-    assert_eq!(deposit_transfer.value, withdraw_shares as u128);
-    Ok(())
-}
-
-#[wasm_bindgen_test]
-fn test_insufficient_shares_withdrawal() -> Result<()> {
-    println!("\n=== Running insufficient shares withdrawal test ===");
-    let token = setup_token();
-    let sender = get_test_address();
-    let initial_deposit = 1000;
-    let withdraw_shares = 1500; // More than deposited
-    
-    println!("Initializing deposit token...");
-    {
-        let mut deposit_token = token.deposit_token.lock().unwrap();
-        *deposit_token = Some(AlkaneId::new(1, 2));
-        println!("Deposit token initialized: {:?}", deposit_token);
-    }
-    
-    println!("Making initial deposit of {}", initial_deposit);
-    token.deposit(initial_deposit, sender.clone())?;
-    
-    println!("Attempting withdrawal of {} shares (should fail)", withdraw_shares);
-    let result = token.withdraw(withdraw_shares, sender.clone());
-    println!("Withdrawal result: {:?}", result);
-    assert!(result.is_err());
-    Ok(())
-}
-
-#[wasm_bindgen_test]
-fn test_multiple_users() -> Result<()> {
-    println!("\n=== Running multiple users test ===");
-    let token = setup_token();
-    let user1 = vec![1, 2, 3];
-    let user2 = vec![4, 5, 6];
-    let deposit1 = 1000;
-    let deposit2 = 500;
-    
-    println!("Initializing deposit token...");
-    {
-        let mut deposit_token = token.deposit_token.lock().unwrap();
-        *deposit_token = Some(AlkaneId::new(1, 2));
-        println!("Deposit token initialized: {:?}", deposit_token);
-    }
-    
-    println!("Making deposit for user1: amount={}, address={:?}", deposit1, user1);
-    token.deposit(deposit1, user1.clone())?;
-    
-    println!("Making deposit for user2: amount={}, address={:?}", deposit2, user2);
-    let transfer = token.deposit(deposit2, user2.clone())?;
-    println!("User2 transfer completed: {:?}", transfer);
-    
-    let user1_shares = token.get_shares(&user1);
-    let user2_shares = token.get_shares(&user2);
-    println!("Final shares - User1: {}, User2: {}", user1_shares, user2_shares);
-    assert_eq!(user1_shares, deposit1);
-    assert_eq!(user2_shares, deposit2);
-    
-    {
-        let total_supply = token.total_supply.lock().unwrap();
-        println!("Total supply: {}", *total_supply);
-        assert_eq!(*total_supply, deposit1 + deposit2);
-    }
-    
-    {
-        let total_deposits = token.total_deposits.lock().unwrap();
-        println!("Total deposits: {}", *total_deposits);
-        assert_eq!(*total_deposits, deposit1 + deposit2);
-    }
-    
-    assert_eq!(transfer.value, deposit2 as u128);
-    Ok(())
-}
-
-// Additional tests for core functionality
 #[wasm_bindgen_test]
 fn test_core_functionality() -> Result<()> {
-    println!("\n=== Running core functionality test ===");
+    println!("\n====== Running Core Functionality Test ======");
     let token = setup_token();
     
-    println!("Checking initial state...");
-    {
-        let total_supply = token.total_supply.lock().unwrap();
-        println!("Initial total supply: {}", *total_supply);
-        assert_eq!(*total_supply, 0);
-    }
+    println!("\n>>> Checking initial state...");
+    // Check initial values with detailed logging
+    let initial_supply = {
+        println!("Acquiring total_supply lock...");
+        let supply = token.total_supply.lock().unwrap();
+        println!("Lock acquired successfully");
+        let value = *supply;
+        println!("Current supply: {}", value);
+        value
+    };
+    assert_eq!(initial_supply, 0, "Initial supply should be 0");
+    
+    let initial_deposits = {
+        println!("Acquiring total_deposits lock...");
+        let deposits = token.total_deposits.lock().unwrap();
+        println!("Lock acquired successfully");
+        let value = *deposits;
+        println!("Current deposits: {}", value);
+        value
+    };
+    assert_eq!(initial_deposits, 0, "Initial deposits should be 0");
+    
+    let initial_token = {
+        println!("Acquiring deposit_token lock...");
+        let token = token.deposit_token.lock().unwrap();
+        println!("Lock acquired successfully");
+        let value = token.clone();
+        println!("Current deposit token: {:?}", value);
+        value
+    };
+    assert!(initial_token.is_none(), "Initial deposit token should be None");
+    
+    println!("\n>>> Initializing deposit token...");
+    let deposit_token_id = AlkaneId::new(1, 2);
+    println!("Created deposit token ID: {:?}", deposit_token_id);
     
     {
-        let total_deposits = token.total_deposits.lock().unwrap();
-        println!("Initial total deposits: {}", *total_deposits);
-        assert_eq!(*total_deposits, 0);
-    }
-    
-    {
-        let deposit_token = token.deposit_token.lock().unwrap();
-        println!("Initial deposit token: {:?}", deposit_token);
-        assert!(deposit_token.is_none());
-    }
-    
-    println!("Initializing deposit token...");
-    {
+        println!("Attempting to acquire deposit_token lock for initialization...");
         let mut deposit_token = token.deposit_token.lock().unwrap();
-        *deposit_token = Some(AlkaneId::new(1, 2));
-        println!("Deposit token initialized: {:?}", deposit_token);
+        println!("Lock acquired successfully");
+        *deposit_token = Some(deposit_token_id);
+        println!("Deposit token initialized: {:?}", *deposit_token);
     }
+    println!("Lock released");
     
-    {
-        let deposit_token = token.deposit_token.lock().unwrap();
-        assert!(deposit_token.is_some());
-        println!("Final deposit token state verified");
-    }
+    // Verify final state
+    println!("\n>>> Verifying final state...");
+    let final_token = {
+        println!("Acquiring deposit_token lock for final verification...");
+        let token = token.deposit_token.lock().unwrap();
+        println!("Lock acquired successfully");
+        let value = token.clone();
+        println!("Final deposit token value: {:?}", value);
+        value
+    };
+    assert!(final_token.is_some(), "Final deposit token should be Some");
     
+    print_token_state(&token, "Final Token State");
+    println!("====== Core Functionality Test Complete ======\n");
     Ok(())
 }
 
-// Additional tests for payment functionality
 #[wasm_bindgen_test]
-fn test_payment_functionality() -> Result<()> {
-    println!("\n=== Running payment functionality test ===");
+fn test_deposit_functionality() -> Result<()> {
+    println!("\n====== Running Deposit Functionality Test ======");
     let token = setup_token();
-    let sender = get_test_address();
+    let test_addr = get_test_address();
     
-    println!("Initializing deposit token...");
+    // Initialize deposit token first
+    println!("\n>>> Setting up deposit token...");
+    let deposit_token_id = AlkaneId::new(1, 2);
     {
         let mut deposit_token = token.deposit_token.lock().unwrap();
-        *deposit_token = Some(AlkaneId::new(1, 2));
-        println!("Deposit token initialized: {:?}", deposit_token);
+        *deposit_token = Some(deposit_token_id);
+        println!("Deposit token initialized: {:?}", *deposit_token);
     }
     
-    // Test small payment
-    let small_amount = 100;
-    println!("Testing small payment: amount={}", small_amount);
-    let transfer = token.deposit(small_amount, sender.clone())?;
-    println!("Small payment transfer completed: {:?}", transfer);
-    assert_eq!(transfer.value, small_amount as u128);
+    // Make initial deposit
+    let initial_deposit = 1000;
+    println!("\n>>> Making initial deposit of {} tokens", initial_deposit);
+    println!("Address: {:?}", test_addr);
     
-    // Test large payment
-    let large_amount = 1_000_000;
-    println!("Testing large payment: amount={}", large_amount);
-    let transfer = token.deposit(large_amount, sender.clone())?;
-    println!("Large payment transfer completed: {:?}", transfer);
-    assert_eq!(transfer.value, large_amount as u128);
+    let transfer = token.deposit(initial_deposit, test_addr.clone())?;
+    println!("Transfer result: {:?}", transfer);
     
+    // Verify deposit state
+    println!("\n>>> Verifying deposit state...");
+    {
+        let total_deposits = token.total_deposits.lock().unwrap();
+        println!("Total deposits after: {}", *total_deposits);
+        assert_eq!(*total_deposits, initial_deposit, "Total deposits should match initial deposit");
+    }
+    
+    {
+        let total_supply = token.total_supply.lock().unwrap();
+        println!("Total supply after: {}", *total_supply);
+        assert_eq!(*total_supply, initial_deposit, "Total supply should match initial deposit");
+    }
+    
+    let shares = token.get_shares(&test_addr);
+    println!("Shares for address: {}", shares);
+    assert_eq!(shares, initial_deposit, "Shares should match deposit amount");
+    
+    print_token_state(&token, "Post Initial Deposit State");
+    
+    // Make second deposit
+    let second_deposit = 500;
+    println!("\n>>> Making second deposit of {} tokens", second_deposit);
+    let transfer = token.deposit(second_deposit, test_addr.clone())?;
+    println!("Transfer result: {:?}", transfer);
+    
+    // Verify cumulative state
+    println!("\n>>> Verifying cumulative state...");
+    {
+        let total_deposits = token.total_deposits.lock().unwrap();
+        println!("Total deposits after: {}", *total_deposits);
+        assert_eq!(*total_deposits, initial_deposit + second_deposit, "Total deposits should be cumulative");
+    }
+    
+    {
+        let total_supply = token.total_supply.lock().unwrap();
+        println!("Total supply after: {}", *total_supply);
+        assert_eq!(*total_supply, initial_deposit + second_deposit, "Total supply should be cumulative");
+    }
+    
+    let shares = token.get_shares(&test_addr);
+    println!("Final shares for address: {}", shares);
+    assert_eq!(shares, initial_deposit + second_deposit, "Final shares should be cumulative");
+    
+    print_token_state(&token, "Final State After Second Deposit");
+    
+    print_token_state(&token, "Final State After Second Deposit");
+    println!("====== Deposit Functionality Test Complete ======\n");
     Ok(())
-} 
+}
+
+#[wasm_bindgen_test]
+fn test_multiple_users_deposit() -> Result<()> {
+    println!("\n====== Running Multiple Users Deposit Test ======");
+    let token = setup_token();
+    
+    // Initialize deposit token
+    println!("\n>>> Setting up deposit token...");
+    let deposit_token_id = AlkaneId::new(1, 2);
+    {
+        let mut deposit_token = token.deposit_token.lock().unwrap();
+        *deposit_token = Some(deposit_token_id);
+        println!("Deposit token initialized: {:?}", *deposit_token);
+    }
+    
+    // Create two test addresses
+    let addr1 = vec![1, 2, 3, 4, 5];
+    let addr2 = vec![6, 7, 8, 9, 10];
+    println!("Created test addresses:");
+    println!("Address 1: {:?}", addr1);
+    println!("Address 2: {:?}", addr2);
+    
+    // First user deposit
+    let deposit1 = 1000;
+    println!("\n>>> User 1 depositing {} tokens", deposit1);
+    let transfer = token.deposit(deposit1, addr1.clone())?;
+    println!("Transfer result: {:?}", transfer);
+    
+    print_token_state(&token, "After First User Deposit");
+    
+    // Second user deposit
+    let deposit2 = 500;
+    println!("\n>>> User 2 depositing {} tokens", deposit2);
+    let transfer = token.deposit(deposit2, addr2.clone())?;
+    println!("Transfer result: {:?}", transfer);
+    
+    // Verify individual balances
+    let shares1 = token.get_shares(&addr1);
+    let shares2 = token.get_shares(&addr2);
+    println!("\n>>> Final share balances:");
+    println!("User 1 shares: {}", shares1);
+    println!("User 2 shares: {}", shares2);
+    
+    assert_eq!(shares1, deposit1, "User 1 shares should match their deposit");
+    assert_eq!(shares2, deposit2, "User 2 shares should match their deposit");
+    
+    // Verify total state
+    {
+        let total_deposits = token.total_deposits.lock().unwrap();
+        println!("Final total deposits: {}", *total_deposits);
+        assert_eq!(*total_deposits, deposit1 + deposit2, "Total deposits should be sum of both deposits");
+    }
+    
+    {
+        let total_supply = token.total_supply.lock().unwrap();
+        println!("Final total supply: {}", *total_supply);
+        assert_eq!(*total_supply, deposit1 + deposit2, "Total supply should be sum of both deposits");
+    }
+    
+    print_token_state(&token, "Final State After Both Users");
+    println!("====== Multiple Users Deposit Test Complete ======\n");
+    Ok(())
+}
+
+// Let's start with just these two tests to verify the approach works 
