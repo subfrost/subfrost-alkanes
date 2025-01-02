@@ -1,0 +1,2 @@
+pub const ALKANE_FACTORY_OWNED_TOKEN_ID: u128 =  0x0fff;
+pub const ALKANE_FACTORY_FREE_MINT_ID: u128 = 0x0ffe;
