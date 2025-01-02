@@ -6,6 +6,7 @@ mod tests {
     use alkanes_support::parcel::AlkaneTransferParcel;
     use anyhow::Result;
     use wasm_bindgen_test::*;
+    use wasm_bindgen::JsValue;
 
     #[allow(unused_imports)]
     use {
@@ -540,6 +541,228 @@ mod tests {
         assert_eq!(assets_transfer.value, expected_assets, "Preview withdraw should match actual assets received");
 
         println!("====== Preview Functions Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_asset_share_conversions() -> Result<()> {
+        println!("\n====== Running Asset/Share Conversion Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        // Test initial conversion (should be 1:1 due to virtual offset)
+        let initial_assets = 1000;
+        println!("\n>>> Testing initial conversion (empty vault)");
+        println!("Converting {} assets to shares", initial_assets);
+        let initial_shares = token.convert_to_shares(initial_assets);
+        println!("Got {} shares", initial_shares);
+        assert_eq!(initial_shares, initial_assets as u128, "Initial conversion should be 1:1");
+
+        // Make a deposit to set up vault state
+        let user1 = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        println!("\n>>> Setting up vault with initial deposit");
+        println!("Depositing {} assets", initial_assets);
+        let transfer = token.deposit(initial_assets, user1.clone())?;
+        print_token_state(&token, "After Initial Deposit");
+
+        // Test conversion after vault has value
+        let test_assets = 500;
+        println!("\n>>> Testing conversion with active vault");
+        println!("Converting {} assets to shares", test_assets);
+        let shares = token.convert_to_shares(test_assets);
+        println!("Got {} shares", shares);
+        
+        // Convert shares back to assets
+        println!("Converting {} shares back to assets", shares);
+        let assets = token.convert_to_assets(shares as u64);
+        println!("Got {} assets", assets);
+        
+        // Verify conversion roundtrip
+        assert!(assets <= test_assets as u128, "Conversion roundtrip should not inflate value");
+        
+        println!("====== Asset/Share Conversion Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_max_operations() -> Result<()> {
+        println!("\n====== Running Max Operations Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        let user = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        
+        // Test max deposit/mint before any deposits
+        println!("\n>>> Testing max operations on empty vault");
+        let max_deposit = token.max_deposit(&user);
+        let max_mint = token.max_mint(&user);
+        println!("Max deposit: {}", max_deposit);
+        println!("Max mint: {}", max_mint);
+        
+        // Make a deposit
+        let deposit_amount = 1000;
+        println!("\n>>> Making initial deposit");
+        println!("Amount: {}", deposit_amount);
+        let transfer = token.deposit(deposit_amount, user.clone())?;
+        print_token_state(&token, "After Deposit");
+        print_user_balance(&token, &user, "User");
+
+        // Test max withdraw/redeem
+        println!("\n>>> Testing max operations with balance");
+        let max_withdraw = token.max_withdraw(&user);
+        let max_redeem = token.max_redeem(&user);
+        println!("Max withdraw: {}", max_withdraw);
+        println!("Max redeem: {}", max_redeem);
+        
+        // Verify max withdraw/redeem matches user balance
+        assert_eq!(max_withdraw, deposit_amount as u128, "Max withdraw should match deposit");
+        assert_eq!(max_redeem, deposit_amount as u128, "Max redeem should match deposit");
+
+        println!("====== Max Operations Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_mint_redeem_operations() -> Result<()> {
+        println!("\n====== Running Mint/Redeem Operations Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        let user1 = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        let mint_shares = 1000;
+        
+        // Test mint operation
+        println!("\n>>> Testing mint operation");
+        println!("Minting {} shares", mint_shares);
+        let transfer = token.mint(mint_shares, user1.clone())?;
+        print_token_state(&token, "After Mint");
+        print_user_balance(&token, &user1, "User 1");
+        
+        // Verify minted shares
+        let user_shares = token.get_shares(&user1);
+        assert_eq!(user_shares, mint_shares, "User should receive exact requested shares");
+        
+        // Preview redeem before actual redeem
+        println!("\n>>> Testing redeem preview");
+        let redeem_shares = 500;
+        println!("Previewing redemption of {} shares", redeem_shares);
+        let expected_assets = token.preview_redeem(redeem_shares);
+        println!("Expected assets: {}", expected_assets);
+        
+        // Test redeem operation
+        println!("\n>>> Testing redeem operation");
+        println!("Redeeming {} shares", redeem_shares);
+        let (shares_transfer, assets_transfer) = token.redeem(redeem_shares, user1.clone())?;
+        print_token_state(&token, "After Redeem");
+        print_user_balance(&token, &user1, "User 1");
+        
+        // Verify redeem results
+        assert_eq!(shares_transfer.value, redeem_shares as u128, "Should burn exact requested shares");
+        assert_eq!(assets_transfer.value, expected_assets, "Should receive previewed assets");
+        
+        println!("====== Mint/Redeem Operations Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_total_assets_tracking() -> Result<()> {
+        println!("\n====== Running Total Assets Tracking Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        // Verify initial total assets
+        println!("\n>>> Checking initial total assets");
+        let initial_assets = token.total_assets();
+        println!("Initial total assets: {}", initial_assets);
+        assert_eq!(initial_assets, 0, "Should start with zero assets");
+
+        // Make deposits from multiple users
+        let users: Vec<Vec<u8>> = (1..=3)
+            .map(|i| vec![i as u8, 0, 0, 0, 0, 0, 0, 0])
+            .collect();
+        
+        let mut total_deposited = 0;
+        println!("\n>>> Making deposits from multiple users");
+        for (i, user) in users.iter().enumerate() {
+            let amount = (i + 1) * 1000;
+            total_deposited += amount;
+            println!("\nUser {} depositing {}", i + 1, amount);
+            let transfer = token.deposit(amount as u64, user.clone())?;
+            print_token_state(&token, &format!("After User {} Deposit", i + 1));
+        }
+
+        // Verify total assets after deposits
+        let total_assets = token.total_assets();
+        println!("\n>>> Checking total assets after deposits");
+        println!("Total assets: {}", total_assets);
+        println!("Total deposited: {}", total_deposited);
+        assert_eq!(total_assets, total_deposited as u128, "Total assets should match deposits");
+
+        // Make some withdrawals
+        println!("\n>>> Making withdrawals");
+        let withdraw_user = &users[0];
+        let withdraw_shares = token.get_shares(withdraw_user) / 2;
+        println!("User 1 withdrawing {} shares", withdraw_shares);
+        let (_, assets_transfer) = token.withdraw(withdraw_shares, withdraw_user.clone())?;
+        print_token_state(&token, "After Withdrawal");
+
+        // Verify total assets after withdrawal
+        let final_assets = token.total_assets();
+        println!("\n>>> Checking final total assets");
+        println!("Final total assets: {}", final_assets);
+        println!("Assets withdrawn: {}", assets_transfer.value);
+        assert_eq!(
+            final_assets,
+            total_deposited as u128 - assets_transfer.value,
+            "Total assets should reflect withdrawal"
+        );
+
+        println!("====== Total Assets Tracking Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_edge_cases() -> Result<()> {
+        console_log!("\n====== Running Edge Cases Test ======\n");
+        
+        let (token, _context) = setup_token();
+        
+        console_log!(">>> Testing zero value operations");
+        console_log!("Attempting zero deposit...");
+        
+        // Test that zero deposits are rejected
+        let user = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        let result = token.deposit(0, user.clone());
+        match result {
+            Ok(_) => {
+                console_log!("Zero deposit was incorrectly accepted");
+                assert!(false, "Zero deposits should be rejected");
+            },
+            Err(_) => {
+                console_log!("Zero deposit correctly rejected");
+            }
+        }
+        
+        // Test minimum deposit
+        console_log!("\n>>> Testing minimum deposit");
+        let min_deposit = 1;
+        let _transfer = token.deposit(min_deposit, user.clone())?;
+        let balance = token.get_shares(&user);
+        assert_eq!(balance, min_deposit, "Minimum deposit should be accepted");
+        
+        // Test maximum deposit
+        console_log!("\n>>> Testing maximum deposit");
+        let max_deposit = u64::MAX;
+        assert!(max_deposit > 0, "Maximum deposit should be positive");
+        
+        // Test rounding behavior
+        console_log!("\n>>> Testing rounding behavior");
+        let odd_amount = 1001;
+        let _transfer = token.deposit(odd_amount, user.clone())?;
+        let balance = token.get_shares(&user);
+        assert_eq!(balance, min_deposit + odd_amount, "Deposit should handle odd amounts");
+        
+        console_log!("\n====== Edge Cases Test Complete ======\n");
         Ok(())
     }
 } 
