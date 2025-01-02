@@ -350,4 +350,70 @@ mod tests {
         println!("====== Share Calculation with Appreciation Test Complete ======\n");
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn test_share_calculation_with_depreciation() -> Result<()> {
+        println!("\n====== Running Share Calculation with Depreciation Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        // First user deposits 1000 tokens when vault is empty
+        let user1 = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        println!("\n>>> First user depositing 1000 tokens");
+        let _transfer = token.deposit(1000, user1.clone())?;
+        print_token_state(&token, "After First Deposit");
+        print_user_balance(&token, &user1, "User 1");
+        
+        // Verify first user gets 1:1 shares
+        assert_eq!(token.get_shares(&user1), 1000, "First user should get 1000 shares for 1000 tokens");
+        
+        // Simulate vault depreciation: total_deposits was 1000, now worth 500
+        // We do this by manually updating total_deposits
+        *token.total_deposits.borrow_mut() = 500;
+        println!("\n>>> Simulating vault depreciation");
+        println!("Original deposits: 1000");
+        println!("New vault value: 500");
+        print_token_state(&token, "After Value Depreciation");
+
+        // Second user deposits same amount (1000) after depreciation
+        let user2 = vec![2, 0, 0, 0, 0, 0, 0, 0];
+        println!("\n>>> Second user depositing 1000 tokens after depreciation");
+        let _transfer = token.deposit(1000, user2.clone())?;
+        print_token_state(&token, "After Second Deposit");
+        print_user_balance(&token, &user2, "User 2");
+        
+        // Second user should get more shares for same deposit
+        let user2_shares = token.get_shares(&user2);
+        println!("\n>>> Share Analysis:");
+        println!("User 1: 1000 shares for 1000 tokens (at vault value 1000)");
+        println!("User 2: {} shares for 1000 tokens (at vault value 500)", user2_shares);
+        assert!(user2_shares > 1000, "Second user should get more shares due to depreciation");
+        
+        // Calculate expected shares for second user:
+        // shares = deposit_amount * total_supply / total_deposits
+        // shares = 1000 * 1000 / 500 = 2000
+        assert_eq!(user2_shares, 2000, "Second user should get 2000 shares for 1000 tokens");
+
+        // Verify withdrawal amounts
+        println!("\n>>> Testing withdrawals after depreciation");
+        
+        // User 1 withdraws all shares
+        let (_shares_transfer1, token_transfer1) = token.withdraw(1000, user1.clone())?;
+        println!("User 1 withdrawal (1000 shares):");
+        println!("Tokens returned: {}", token_transfer1.value);
+        
+        // User 2 withdraws all shares
+        let (_shares_transfer2, token_transfer2) = token.withdraw(user2_shares, user2.clone())?;
+        println!("User 2 withdrawal ({} shares):", user2_shares);
+        println!("Tokens returned: {}", token_transfer2.value);
+        
+        // Verify proportional withdrawal amounts
+        // User 1 (1000 shares) should get 500 tokens (1/3 of the vault)
+        // User 2 (2000 shares) should get 1000 tokens (2/3 of the vault)
+        assert_eq!(token_transfer1.value, 500, "User 1 should get 500 tokens for 1000 shares");
+        assert_eq!(token_transfer2.value, 1000, "User 2 should get 1000 tokens for 2000 shares");
+
+        println!("====== Share Calculation with Depreciation Test Complete ======\n");
+        Ok(())
+    }
 } 
