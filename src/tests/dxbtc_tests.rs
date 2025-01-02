@@ -29,6 +29,10 @@ mod tests {
         println!("  Caller ID: {:?}", context.caller);
         println!("  Vout: {}", context.vout);
         
+        // Initialize deposit token
+        *token.deposit_token.borrow_mut() = Some(AlkaneId::new(1, 2));
+        println!("Initialized deposit token: {:?}", token.deposit_token.borrow());
+        
         DxBtc::set_mock_context(context.clone());
         println!("=== Token Setup Complete ===\n");
         (token, context)
@@ -44,6 +48,10 @@ mod tests {
         println!("{}", output);
     }
 
+    fn print_user_balance(token: &DxBtc, user: &[u8], label: &str) {
+        println!(">>> {} balance: {}", label, token.get_shares(user));
+    }
+
     #[wasm_bindgen_test]
     fn test_initialization() -> Result<()> {
         println!("\n====== Running Initialization Test ======");
@@ -51,7 +59,7 @@ mod tests {
         print_token_state(&token, "Initial State");
         
         // Verify initial state
-        assert!(token.deposit_token.borrow().is_none(), "Deposit token should be None initially");
+        assert!(token.deposit_token.borrow().is_some(), "Deposit token should be initialized");
         assert_eq!(*token.total_supply.borrow(), 0, "Initial supply should be 0");
         assert_eq!(*token.total_deposits.borrow(), 0, "Initial deposits should be 0");
         
@@ -132,6 +140,80 @@ mod tests {
         assert_eq!(*token.total_deposits.borrow(), 1500, "Total deposits should be 1500");
         
         println!("====== Multiple Users Deposit Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_multiple_users_deposit_and_withdraw() -> Result<()> {
+        println!("\n====== Running Multiple Users Deposit and Withdraw Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        // Create 5 users
+        let users: Vec<Vec<u8>> = (1..=5)
+            .map(|i| vec![i as u8, 0, 0, 0, 0, 0, 0, 0])
+            .collect();
+
+        // Initial deposits
+        println!("\n=== Initial Deposits ===");
+        for (i, user) in users.iter().enumerate() {
+            let amount = (i + 1) * 1000;
+            println!("\n>>> User {} depositing", i + 1);
+            println!("Amount: {}", amount);
+            println!("Address: {:02x?}", user);
+            
+            let transfer = token.deposit(amount as u64, user.clone())?;
+            println!("Deposit completed. Transfer result: {:?}", transfer);
+            print_user_balance(&token, user, &format!("User {}", i + 1));
+        }
+        print_token_state(&token, "After All Deposits");
+
+        // Partial withdrawals
+        println!("\n=== Partial Withdrawals ===");
+        for (i, user) in users.iter().enumerate() {
+            let withdraw_amount = (i + 1) * 200;
+            println!("\n>>> User {} withdrawing", i + 1);
+            println!("Amount: {}", withdraw_amount);
+            println!("Address: {:02x?}", user);
+            
+            let transfers = token.withdraw(withdraw_amount as u64, user.clone())?;
+            println!("Withdrawal completed. Transfer results: {:?}", transfers);
+            print_user_balance(&token, user, &format!("User {}", i + 1));
+        }
+        print_token_state(&token, "After Partial Withdrawals");
+
+        // Full withdrawals for users 1, 3, and 5
+        println!("\n=== Full Withdrawals (Users 1, 3, 5) ===");
+        for i in [0, 2, 4] {
+            let user = &users[i];
+            let remaining_balance = token.get_shares(user);
+            println!("\n>>> User {} withdrawing remaining balance", i + 1);
+            println!("Amount: {}", remaining_balance);
+            println!("Address: {:02x?}", user);
+            
+            let transfers = token.withdraw(remaining_balance, user.clone())?;
+            println!("Withdrawal completed. Transfer results: {:?}", transfers);
+            print_user_balance(&token, user, &format!("User {}", i + 1));
+        }
+        print_token_state(&token, "After Full Withdrawals");
+
+        // Verify final state
+        println!("\n=== Final Balances ===");
+        for (i, user) in users.iter().enumerate() {
+            let balance = token.get_shares(user);
+            println!("User {} balance: {}", i + 1, balance);
+            
+            // Users 1, 3, 5 should have 0 balance
+            if i % 2 == 0 {
+                assert_eq!(balance, 0, "User {} should have 0 balance", i + 1);
+            } else {
+                // Users 2, 4 should have their remaining balance after partial withdrawal
+                let expected = ((i + 1) * 1000) - ((i + 1) * 200);
+                assert_eq!(balance, expected as u64, "User {} should have {} balance", i + 1, expected);
+            }
+        }
+
+        println!("====== Multiple Users Deposit and Withdraw Test Complete ======\n");
         Ok(())
     }
 } 

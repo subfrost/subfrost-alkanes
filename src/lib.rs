@@ -63,6 +63,54 @@ pub mod alkanes {
                 })
             }
 
+            pub fn withdraw(&self, shares_amount: u64, sender: Vec<u8>) -> Result<(AlkaneTransfer, AlkaneTransfer)> {
+                let context = self.context()?;
+                
+                // Get current shares first
+                let current_shares = {
+                    let balances = self.balances.borrow();
+                    match balances.get(&sender) {
+                        Some(balance) => u64::from_le_bytes(balance.as_slice().try_into().unwrap_or([0; 8])),
+                        None => 0
+                    }
+                };
+
+                // Verify user has enough shares
+                if current_shares < shares_amount {
+                    return Err(anyhow!("insufficient shares"));
+                }
+
+                // Calculate withdrawal amount (1:1 ratio for simplicity)
+                let withdrawal_amount = shares_amount;
+                if withdrawal_amount == 0 {
+                    return Err(anyhow!("zero withdrawal amount"));
+                }
+
+                // Get deposit token
+                let deposit_token = self.deposit_token.borrow()
+                    .clone()
+                    .ok_or_else(|| anyhow!("deposit token not initialized"))?;
+
+                // Update state
+                *self.total_supply.borrow_mut() -= shares_amount;
+                *self.total_deposits.borrow_mut() -= withdrawal_amount;
+                
+                // Update shares
+                let mut balances = self.balances.borrow_mut();
+                balances.set(sender, (current_shares - shares_amount).to_le_bytes().to_vec());
+
+                Ok((
+                    AlkaneTransfer {
+                        id: context.myself.clone(),
+                        value: shares_amount as u128,
+                    },
+                    AlkaneTransfer {
+                        id: deposit_token,
+                        value: withdrawal_amount as u128,
+                    }
+                ))
+            }
+
             pub fn context(&self) -> Result<Context> {
                 MOCK_CONTEXT.with(|ctx| {
                     ctx.borrow().clone().ok_or(anyhow!("no context set"))
