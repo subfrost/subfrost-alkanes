@@ -12,6 +12,11 @@ use metashrew_support::compat::{to_arraybuffer_layout, to_ptr};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+// Constants for virtual offset protection and precision
+const VIRTUAL_SHARES: u128 = 1_000_000;  // 1M virtual shares
+const VIRTUAL_ASSETS: u128 = 1_000_000;  // 1M virtual assets
+const DECIMALS_MULTIPLIER: u128 = 1_000_000_000;  // 9 decimals for precision
+
 #[derive(Default)]
 pub struct DxBtc {
     deposit_token: RefCell<Option<AlkaneId>>,
@@ -22,25 +27,38 @@ pub struct DxBtc {
 
 impl DxBtc {
     fn calculate_mint_amount(&self, deposit_amount: u128) -> u128 {
-        let total_deposits = *self.total_deposits.borrow();
-        let total_supply = *self.total_supply.borrow();
-        if total_deposits == 0 {
+        let total_deposits = *self.total_deposits.borrow() + VIRTUAL_ASSETS;
+        let total_supply = *self.total_supply.borrow() + VIRTUAL_SHARES;
+
+        if total_deposits == VIRTUAL_ASSETS {
+            // First real deposit after virtual offset
             deposit_amount
         } else {
-            // Calculate based on ratio of existing deposits to total supply
-            (deposit_amount * total_supply) / total_deposits
+            // Calculate shares with high precision and virtual offset protection
+            ((deposit_amount as u128 * DECIMALS_MULTIPLIER * total_supply) / 
+             (total_deposits * DECIMALS_MULTIPLIER)) as u128
         }
     }
 
     fn calculate_withdrawal_amount(&self, shares_amount: u128) -> u128 {
-        let total_supply = *self.total_supply.borrow();
-        let total_deposits = *self.total_deposits.borrow();
-        if total_supply == 0 {
+        let total_supply = *self.total_supply.borrow() + VIRTUAL_SHARES;
+        let total_deposits = *self.total_deposits.borrow() + VIRTUAL_ASSETS;
+
+        if total_supply == VIRTUAL_SHARES {
             0
         } else {
-            // Calculate proportional amount of deposits to withdraw
-            (shares_amount * total_deposits) / total_supply
+            // Calculate withdrawal amount with high precision and virtual offset protection
+            ((shares_amount as u128 * DECIMALS_MULTIPLIER * total_deposits) / 
+             (total_supply * DECIMALS_MULTIPLIER)) as u128
         }
+    }
+
+    fn preview_deposit(&self, assets: u128) -> u128 {
+        self.calculate_mint_amount(assets)
+    }
+
+    fn preview_withdraw(&self, shares: u128) -> u128 {
+        self.calculate_withdrawal_amount(shares)
     }
 
     fn total_supply(&self) -> u128 {
@@ -150,6 +168,18 @@ impl AlkaneResponder for DxBtc {
                 let address_id = shift_or_err(&mut inputs)?;
                 let address = address_id.to_le_bytes().to_vec();
                 response.data = self.get_shares(&address).to_le_bytes().to_vec();
+                Ok(response)
+            }
+            4 => {
+                // Preview deposit
+                let deposit_amount = shift_or_err(&mut inputs)?;
+                response.data = self.preview_deposit(deposit_amount).to_le_bytes().to_vec();
+                Ok(response)
+            }
+            5 => {
+                // Preview withdraw
+                let shares_amount = shift_or_err(&mut inputs)?;
+                response.data = self.preview_withdraw(shares_amount).to_le_bytes().to_vec();
                 Ok(response)
             }
             101 => {

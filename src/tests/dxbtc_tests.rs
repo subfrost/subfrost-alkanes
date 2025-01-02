@@ -13,6 +13,11 @@ mod tests {
         std::fmt::Write,
     };
 
+    // Constants matching the implementation
+    const VIRTUAL_SHARES: u64 = 1_000_000;  // 1M virtual shares
+    const VIRTUAL_ASSETS: u64 = 1_000_000;  // 1M virtual assets
+    const DECIMALS_MULTIPLIER: u64 = 1_000_000_000;  // 9 decimals
+
     fn setup_token() -> (DxBtc, Context) {
         println!("\n=== Setting up DxBtc Token ===");
         let token = DxBtc::default();
@@ -414,6 +419,127 @@ mod tests {
         assert_eq!(token_transfer2.value, 1000, "User 2 should get 1000 tokens for 2000 shares");
 
         println!("====== Share Calculation with Depreciation Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_virtual_offset_protection() -> Result<()> {
+        println!("\n====== Running Virtual Offset Protection Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        // First user attempts a very small deposit
+        let user1 = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        let small_deposit = 100;  // Very small deposit
+        println!("\n>>> First user depositing small amount");
+        println!("Amount: {}", small_deposit);
+        println!("Address: {:02x?}", user1);
+        
+        let transfer = token.deposit(small_deposit, user1.clone())?;
+        println!("First deposit completed. Transfer result: {:?}", transfer);
+        print_token_state(&token, "After Small Deposit");
+        print_user_balance(&token, &user1, "User 1");
+
+        // Verify that the shares received are reasonable despite small deposit
+        let shares_received = token.get_shares(&user1);
+        println!("\n>>> Share Analysis:");
+        println!("Deposit amount: {}", small_deposit);
+        println!("Shares received: {}", shares_received);
+        println!("Ratio: {}", shares_received as f64 / small_deposit as f64);
+        
+        // The ratio should be close to 1 for the first deposit due to virtual offset
+        assert!(shares_received > 0, "Should receive non-zero shares even for small deposit");
+        assert_eq!(shares_received, small_deposit, "First deposit should get 1:1 shares after virtual offset");
+
+        println!("====== Virtual Offset Protection Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_decimal_precision() -> Result<()> {
+        println!("\n====== Running Decimal Precision Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        // First user deposits a large amount
+        let user1 = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        let large_deposit = 1_000_000;
+        println!("\n>>> First user depositing");
+        println!("Amount: {}", large_deposit);
+        println!("Address: {:02x?}", user1);
+        
+        let transfer = token.deposit(large_deposit, user1.clone())?;
+        println!("First deposit completed. Transfer result: {:?}", transfer);
+        print_token_state(&token, "After First Deposit");
+        print_user_balance(&token, &user1, "User 1");
+
+        // Second user deposits a very small amount
+        let user2 = vec![2, 0, 0, 0, 0, 0, 0, 0];
+        let small_deposit = 100;
+        println!("\n>>> Second user depositing small amount");
+        println!("Amount: {}", small_deposit);
+        println!("Address: {:02x?}", user2);
+        
+        let transfer = token.deposit(small_deposit, user2.clone())?;
+        println!("Second deposit completed. Transfer result: {:?}", transfer);
+        print_token_state(&token, "After Second Deposit");
+        print_user_balance(&token, &user2, "User 2");
+
+        // Verify precision in share calculation
+        let user2_shares = token.get_shares(&user2);
+        println!("\n>>> Share Analysis:");
+        println!("User 1: {} shares for {} deposit", token.get_shares(&user1), large_deposit);
+        println!("User 2: {} shares for {} deposit", user2_shares, small_deposit);
+        
+        // The small deposit should receive a proportional amount of shares
+        assert!(user2_shares > 0, "Should receive non-zero shares for small deposit");
+        
+        // Calculate expected shares with high precision
+        let expected_shares = (small_deposit as u128 * token.get_shares(&user1) as u128) / large_deposit as u128;
+        println!("Expected shares for User 2: {}", expected_shares);
+        assert_eq!(user2_shares, expected_shares as u64, "Share calculation should be precise");
+
+        println!("====== Decimal Precision Test Complete ======\n");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_preview_functions() -> Result<()> {
+        println!("\n====== Running Preview Functions Test ======");
+        let (token, _) = setup_token();
+        print_token_state(&token, "Initial State");
+
+        let deposit_amount = 1000;
+        println!("\n>>> Testing preview_deposit");
+        println!("Amount to deposit: {}", deposit_amount);
+        let expected_shares = token.preview_deposit(deposit_amount);
+        println!("Expected shares: {}", expected_shares);
+
+        // Perform actual deposit
+        let user = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        let transfer = token.deposit(deposit_amount, user.clone())?;
+        println!("Actual deposit completed. Transfer result: {:?}", transfer);
+        
+        // Verify preview was accurate
+        assert_eq!(transfer.value, expected_shares, "Preview deposit should match actual shares received");
+
+        // Test preview_withdraw
+        println!("\n>>> Testing preview_withdraw");
+        let shares_to_withdraw = 500;
+        println!("Shares to withdraw: {}", shares_to_withdraw);
+        let expected_assets = token.preview_withdraw(shares_to_withdraw);
+        println!("Expected assets: {}", expected_assets);
+
+        // Perform actual withdrawal
+        let (shares_transfer, assets_transfer) = token.withdraw(shares_to_withdraw, user.clone())?;
+        println!("Actual withdrawal completed.");
+        println!("Shares burned: {}", shares_transfer.value);
+        println!("Assets returned: {}", assets_transfer.value);
+        
+        // Verify preview was accurate
+        assert_eq!(assets_transfer.value, expected_assets, "Preview withdraw should match actual assets received");
+
+        println!("====== Preview Functions Test Complete ======\n");
         Ok(())
     }
 } 

@@ -19,6 +19,11 @@ pub mod alkanes {
             static MOCK_CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
         }
 
+        // Constants for virtual offset protection and precision
+        const VIRTUAL_SHARES: u64 = 1_000_000;  // 1M virtual shares
+        const VIRTUAL_ASSETS: u64 = 1_000_000;  // 1M virtual assets
+        const DECIMALS_MULTIPLIER: u128 = 1_000_000_000;  // 9 decimals for precision
+
         #[derive(Default)]
         pub struct DxBtc {
             pub deposit_token: RefCell<Option<AlkaneId>>,
@@ -151,6 +156,33 @@ pub mod alkanes {
                 MOCK_CONTEXT.with(|ctx| {
                     *ctx.borrow_mut() = Some(context);
                 });
+            }
+
+            pub fn preview_deposit(&self, assets: u64) -> u128 {
+                let total_deposits = u128::from(*self.total_deposits.borrow()) + u128::from(VIRTUAL_ASSETS);
+                let total_supply = u128::from(*self.total_supply.borrow()) + u128::from(VIRTUAL_SHARES);
+
+                if total_deposits == u128::from(VIRTUAL_ASSETS) {
+                    // First real deposit after virtual offset
+                    u128::from(assets)
+                } else {
+                    // Calculate shares with high precision and virtual offset protection
+                    (u128::from(assets) * DECIMALS_MULTIPLIER * total_supply) / 
+                    (total_deposits * DECIMALS_MULTIPLIER)
+                }
+            }
+
+            pub fn preview_withdraw(&self, shares: u64) -> u128 {
+                let total_supply = u128::from(*self.total_supply.borrow()) + u128::from(VIRTUAL_SHARES);
+                let total_deposits = u128::from(*self.total_deposits.borrow()) + u128::from(VIRTUAL_ASSETS);
+
+                if total_supply == u128::from(VIRTUAL_SHARES) {
+                    0
+                } else {
+                    // Calculate withdrawal amount with high precision and virtual offset protection
+                    (u128::from(shares) * DECIMALS_MULTIPLIER * total_deposits) / 
+                    (total_supply * DECIMALS_MULTIPLIER)
+                }
             }
         }
 
