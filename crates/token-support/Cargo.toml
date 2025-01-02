@@ -1,9 +1,9 @@
 [package]
-name = "frbtc-support"
+name = "token-support"
 version = "0.1.0"
 edition = "2021"
-description = "frBTC support library"
-repository = "https://github.com/subfrost/frBTC"
+description = "alkane token types"
+repository = "https://github.com/subfrost/subfrost-alkanes"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

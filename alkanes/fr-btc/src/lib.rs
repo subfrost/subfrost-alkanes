@@ -14,7 +14,7 @@ use protorune_support::{network::{to_address_str, NetworkParams, set_network},pr
 use ordinals::{Runestone, Artifact};
 use bitcoin::{Script, OutPoint, Amount, TxOut, Transaction};
 use bitcoin::hashes::{Hash};
-use frbtc_support::{Payment};
+use types_support::{Payment};
 use std::sync::Arc;
 
 #[derive(Default)]
