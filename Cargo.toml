@@ -16,7 +16,7 @@ fractal = []
 mainnet = []
 
 [workspace]
-members = ["crates/*", ".", "alkanes/fr-btc"]
+members = ["crates/*", ".", "alkanes/*"]
 
 [dependencies]
 alkanes-support = { git = "https:/github.com/kungfuflex/alkanes-rs" }

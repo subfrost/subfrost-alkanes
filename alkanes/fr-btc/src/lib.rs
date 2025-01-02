@@ -271,7 +271,7 @@ impl AlkaneResponder for SyntheticBitcoin {
                 Ok(payments)
             }
             _ => {
-                panic!("unrecognized opcode");
+                Err(anyhow!("unrecognized opcode"))
             }
         }
     }
