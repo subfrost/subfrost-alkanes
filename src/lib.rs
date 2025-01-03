@@ -11,9 +11,8 @@ pub mod alkanes {
         use std::cell::RefCell;
         use std::io::Cursor;
 
-        // Constants for virtual offset protection
-        pub const VIRTUAL_SHARES: u128 = 1_000_000;  // 1M virtual shares
-        pub const VIRTUAL_ASSETS: u128 = 1_000_000;  // 1M virtual assets
+        // Virtual offset values for share calculation protection
+        const VIRTUAL_OFFSET: u128 = 1_000_000;  // 1M virtual offset for both assets and shares
 
         thread_local! {
             static MOCK_CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
@@ -73,22 +72,26 @@ pub mod alkanes {
                 
                 // Add virtual offsets for subsequent deposits
                 let total_deposits_with_virtual = total_deposits
-                    .checked_add(VIRTUAL_ASSETS)
+                    .checked_add(VIRTUAL_OFFSET)
                     .ok_or_else(|| anyhow!("total_deposits_with_virtual overflow"))?;
                 
                 let total_supply_with_virtual = total_supply
-                    .checked_add(VIRTUAL_SHARES)
+                    .checked_add(VIRTUAL_OFFSET)
                     .ok_or_else(|| anyhow!("total_supply_with_virtual overflow"))?;
                 
                 // Calculate shares with virtual offset protection
-                // Formula: shares = deposit_amount * (total_supply + VIRTUAL_SHARES) / (total_deposits + VIRTUAL_ASSETS)
-                // To avoid overflow, we first divide deposit_amount by (total_deposits + VIRTUAL_ASSETS)
-                // Then multiply by (total_supply + VIRTUAL_SHARES)
+                // Formula: shares = deposit_amount * (total_supply + VIRTUAL_OFFSET) / (total_deposits + VIRTUAL_OFFSET)
+                // To avoid truncation to zero, we first multiply deposit_amount by (total_supply + VIRTUAL_OFFSET)
+                // Then divide by (total_deposits + VIRTUAL_OFFSET)
                 let shares = deposit_amount
-                    .checked_div(total_deposits_with_virtual)
-                    .ok_or_else(|| anyhow!("division by zero in shares calculation"))?
                     .checked_mul(total_supply_with_virtual)
-                    .ok_or_else(|| anyhow!("shares calculation overflow"))?;
+                    .ok_or_else(|| anyhow!("shares calculation overflow"))?
+                    .checked_div(total_deposits_with_virtual)
+                    .ok_or_else(|| anyhow!("division by zero in shares calculation"))?;
+                
+                if shares == 0 {
+                    return Err(anyhow!("calculated shares amount is zero"));
+                }
                 
                 Ok(shares)
             }
@@ -105,11 +108,11 @@ pub mod alkanes {
                 
                 // Add virtual offsets
                 let total_deposits_with_virtual = total_deposits
-                    .checked_add(VIRTUAL_ASSETS)
+                    .checked_add(VIRTUAL_OFFSET)
                     .ok_or_else(|| anyhow!("total_deposits_with_virtual overflow"))?;
                 
                 let total_supply_with_virtual = total_supply
-                    .checked_add(VIRTUAL_SHARES)
+                    .checked_add(VIRTUAL_OFFSET)
                     .ok_or_else(|| anyhow!("total_supply_with_virtual overflow"))?;
                 
                 // Calculate withdrawal amount with virtual offset protection
