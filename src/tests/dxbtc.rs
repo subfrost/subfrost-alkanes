@@ -1,37 +1,77 @@
-#[cfg(test)]
-mod tests {
+#[cfg(any(feature = "test-utils", test))]
+pub mod tests {
     use dx_btc::DxBtc;
     use alkanes_support::context::Context;
-    use alkanes_support::parcel::AlkaneTransfer;
-    use alkanes_runtime::runtime::AlkaneResponder;
+    use alkanes_support::parcel::{AlkaneTransfer, AlkaneTransferParcel};
     use alkanes_support::id::AlkaneId;
+    use alkanes_runtime::runtime::AlkaneResponder;
+    use alkanes_support::response::CallResponse;
     use anyhow::Result;
     use wasm_bindgen_test::*;
     use crate::tests::helpers::AlkaneTest;
-    use crate::tests::helpers as utils;
+
+    wasm_bindgen_test_configure!(run_in_browser);
 
     impl AlkaneTest for DxBtc {
         fn get_deposit_token(&self) -> AlkaneId {
             self.deposit_token.borrow().clone().expect("Deposit token not initialized")
         }
+        
+        fn set_mock_context(context: Context) {
+            thread_local! {
+                static MOCK_CONTEXT: std::cell::RefCell<Option<Context>> = std::cell::RefCell::new(None);
+            }
+            
+            MOCK_CONTEXT.with(|ctx| {
+                *ctx.borrow_mut() = Some(context);
+            });
+        }
     }
 
-    fn setup_token() -> DxBtc {
+    fn create_test_context(myself: AlkaneId, caller: AlkaneId) -> Context {
+        Context {
+            myself,
+            caller,
+            inputs: vec![],
+            incoming_alkanes: AlkaneTransferParcel(vec![]),
+            vout: 0,
+        }
+    }
+
+    fn setup_token() -> (DxBtc, Context) {
         let token = DxBtc::default();
         let deposit_token = AlkaneId::new(1, 2);
         *token.deposit_token.borrow_mut() = Some(deposit_token);
-        token
+        
+        let context = create_test_context(
+            AlkaneId::new(1, 1), // myself
+            AlkaneId::new(1, 2)  // caller
+        );
+        DxBtc::set_mock_context(context.clone());
+        
+        (token, context)
+    }
+
+    fn setup_incoming_deposit(context: &mut Context, amount: u128) {
+        context.incoming_alkanes.0.clear();
+        context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: AlkaneId::new(1, 2), // deposit token
+            value: amount,
+        });
     }
 
     #[wasm_bindgen_test]
-    fn test_deposit_flow() -> Result<()> {
-        let token = setup_token();
+    pub fn test_deposit_flow() -> Result<()> {
+        let (token, mut context) = setup_token();
         let caller = AlkaneId::new(1, 3);
+        let deposit_amount: u128 = 1000;
         
-        // Simulate deposit
-        let deposit_amount = 1000;
-        token.handle_deposit(caller.clone(), deposit_amount)?;
-
+        setup_incoming_deposit(&mut context, deposit_amount);
+        context.inputs = vec![1]; // deposit opcode
+        DxBtc::set_mock_context(context);
+        
+        token.execute()?;
+        
         // Verify state
         let caller_key = DxBtc::get_key_for_alkane_id(&caller);
         assert_eq!(token.get_shares(&caller_key), deposit_amount, "Caller should have correct shares");
@@ -42,18 +82,28 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn test_withdraw_flow() -> Result<()> {
-        let token = setup_token();
+    pub fn test_withdraw_flow() -> Result<()> {
+        let (token, mut context) = setup_token();
         let caller = AlkaneId::new(1, 3);
-
+        let deposit_amount: u128 = 1000;
+        
         // Initial deposit
-        let deposit_amount = 1000;
-        token.handle_deposit(caller.clone(), deposit_amount)?;
-
+        setup_incoming_deposit(&mut context, deposit_amount);
+        context.inputs = vec![1]; // deposit opcode
+        DxBtc::set_mock_context(context.clone());
+        token.execute()?;
+        
         // Withdraw
-        let shares_to_withdraw = 500;
-        token.handle_withdraw(caller.clone(), shares_to_withdraw)?;
-
+        let shares_to_withdraw: u128 = 500;
+        context.incoming_alkanes.0.clear();
+        context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: context.myself.clone(),
+            value: shares_to_withdraw,
+        });
+        context.inputs = vec![2]; // withdraw opcode
+        DxBtc::set_mock_context(context);
+        token.execute()?;
+        
         // Verify state
         let caller_key = DxBtc::get_key_for_alkane_id(&caller);
         assert_eq!(token.get_shares(&caller_key), deposit_amount - shares_to_withdraw, 
@@ -63,7 +113,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn test_deposit_safety() -> Result<()> {
+    pub fn test_deposit_safety() -> Result<()> {
         let (token, mut context) = setup_token();
 
         // Test deposit with zero amount
@@ -85,7 +135,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn test_share_calculation_safety() -> Result<()> {
+    pub fn test_share_calculation_safety() -> Result<()> {
         let (token, mut context) = setup_token();
 
         // Test first deposit (1:1 ratio)
@@ -109,7 +159,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn test_preview_operations() -> Result<()> {
+    pub fn test_preview_operations() -> Result<()> {
         let (token, mut context) = setup_token();
 
         // Test preview_deposit
@@ -131,7 +181,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn test_withdrawal_safety() -> Result<()> {
+    pub fn test_withdrawal_safety() -> Result<()> {
         let (token, mut context) = setup_token();
 
         // First deposit
@@ -163,7 +213,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn test_state_consistency() -> Result<()> {
+    pub fn test_state_consistency() -> Result<()> {
         let (token, mut context) = setup_token();
 
         // Multiple deposits from different users
