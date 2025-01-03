@@ -28,6 +28,7 @@ mod tests {
 
     fn setup_incoming_deposit(context: &mut Context, amount: u128) {
         let deposit_token = AlkaneId::new(1, 2);
+        context.incoming_alkanes.0.clear();  // Clear previous transfers
         context.incoming_alkanes.0.push(AlkaneTransfer {
             id: deposit_token,
             value: amount,

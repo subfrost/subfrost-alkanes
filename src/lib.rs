@@ -81,13 +81,16 @@ pub mod alkanes {
                     .ok_or_else(|| anyhow!("total_supply_with_virtual overflow"))?;
                 
                 // Calculate shares with virtual offset protection
+                // Formula: shares = deposit_amount * (total_supply + VIRTUAL_SHARES) / (total_deposits + VIRTUAL_ASSETS)
+                // To avoid overflow, we first divide deposit_amount by (total_deposits + VIRTUAL_ASSETS)
+                // Then multiply by (total_supply + VIRTUAL_SHARES)
                 let shares = deposit_amount
+                    .checked_div(total_deposits_with_virtual)
+                    .ok_or_else(|| anyhow!("division by zero in shares calculation"))?
                     .checked_mul(total_supply_with_virtual)
                     .ok_or_else(|| anyhow!("shares calculation overflow"))?;
                 
-                shares
-                    .checked_div(total_deposits_with_virtual)
-                    .ok_or_else(|| anyhow!("division by zero in shares calculation"))
+                Ok(shares)
             }
 
             // Calculate withdrawal amount based on shares
