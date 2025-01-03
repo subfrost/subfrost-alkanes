@@ -1,9 +1,4 @@
-pub mod precompiled {
-    pub mod fr_btc_build;
-}
-
 pub mod alkanes {
-    pub use crate::precompiled::fr_btc_build::get_bytes as fr_btc_build;
     pub mod dxbtc {
         use alkanes_runtime::runtime::AlkaneResponder;
         use anyhow::{anyhow, Result};
@@ -14,328 +9,217 @@ pub mod alkanes {
         pub use alkanes_support::utils::shift_or_err;
         pub use alkanes_support::context::Context;
         use std::cell::RefCell;
+        use std::io::Cursor;
+
+        // Constants for virtual offset protection
+        pub const VIRTUAL_SHARES: u128 = 1_000_000;  // 1M virtual shares
+        pub const VIRTUAL_ASSETS: u128 = 1_000_000;  // 1M virtual assets
 
         thread_local! {
             static MOCK_CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
         }
 
-        // Constants for virtual offset protection and precision
-        const VIRTUAL_SHARES: u64 = 1_000_000;  // 1M virtual shares
-        const VIRTUAL_ASSETS: u64 = 1_000_000;  // 1M virtual assets
-        const DECIMALS_MULTIPLIER: u128 = 1_000_000_000;  // 9 decimals for precision
-
         #[derive(Default)]
         pub struct DxBtc {
             pub deposit_token: RefCell<Option<AlkaneId>>,
-            pub total_supply: RefCell<u64>,
-            pub total_deposits: RefCell<u64>,
+            pub total_supply: RefCell<u128>,
+            pub total_deposits: RefCell<u128>,
             pub balances: RefCell<StorageMap>,
         }
 
         impl DxBtc {
-            pub fn get_shares(&self, owner: &[u8]) -> u64 {
+            fn context(&self) -> Result<Context> {
+                #[cfg(test)]
+                {
+                    return MOCK_CONTEXT.with(|ctx| {
+                        ctx.borrow().clone().ok_or(anyhow!("no context set"))
+                    });
+                }
+
+                #[cfg(not(test))]
+                {
+                    let mut cursor = Cursor::new(Vec::new());
+                    Context::parse(&mut cursor)
+                }
+            }
+
+            pub fn get_key_for_alkane_id(id: &AlkaneId) -> Vec<u8> {
+                let mut key = Vec::with_capacity(16);
+                key.extend_from_slice(&id.block.to_le_bytes());
+                key.extend_from_slice(&id.tx.to_le_bytes());
+                key
+            }
+
+            pub fn get_shares(&self, owner: &[u8]) -> u128 {
                 let balances = self.balances.borrow();
                 match balances.get(owner) {
-                    Some(balance) => u64::from_le_bytes(balance.as_slice().try_into().unwrap_or([0; 8])),
+                    Some(balance) => {
+                        let bytes: [u8; 16] = balance.as_slice().try_into().unwrap_or([0; 16]);
+                        u128::from_le_bytes(bytes)
+                    },
                     None => 0
                 }
             }
 
             // Calculate shares based on deposit amount and current vault state
-            fn calculate_shares(&self, deposit_amount: u64) -> u64 {
-                let total_supply = *self.total_supply.borrow();
+            fn calculate_shares(&self, deposit_amount: u128) -> Result<u128> {
                 let total_deposits = *self.total_deposits.borrow();
-
-                if total_supply == 0 || total_deposits == 0 {
-                    // First deposit gets 1:1 shares
-                    deposit_amount
-                } else {
-                    // Calculate shares based on the proportion of the total vault value
-                    // shares = deposit_amount * total_supply / total_deposits
-                    ((deposit_amount as u128 * total_supply as u128) / total_deposits as u128) as u64
+                let total_supply = *self.total_supply.borrow();
+                
+                // For first deposit, give 1:1 shares
+                if total_supply == 0 {
+                    return Ok(deposit_amount);
                 }
+                
+                // Add virtual offsets for subsequent deposits
+                let total_deposits_with_virtual = total_deposits
+                    .checked_add(VIRTUAL_ASSETS)
+                    .ok_or_else(|| anyhow!("total_deposits_with_virtual overflow"))?;
+                
+                let total_supply_with_virtual = total_supply
+                    .checked_add(VIRTUAL_SHARES)
+                    .ok_or_else(|| anyhow!("total_supply_with_virtual overflow"))?;
+                
+                // Calculate shares with virtual offset protection
+                let shares = deposit_amount
+                    .checked_mul(total_supply_with_virtual)
+                    .ok_or_else(|| anyhow!("shares calculation overflow"))?;
+                
+                shares
+                    .checked_div(total_deposits_with_virtual)
+                    .ok_or_else(|| anyhow!("division by zero in shares calculation"))
             }
 
             // Calculate withdrawal amount based on shares
-            fn calculate_withdrawal_amount(&self, shares_amount: u64) -> u64 {
-                let total_supply = *self.total_supply.borrow();
+            fn calculate_withdrawal_amount(&self, shares_amount: u128) -> Result<u128> {
                 let total_deposits = *self.total_deposits.borrow();
-
-                if total_supply == 0 || total_deposits == 0 {
-                    shares_amount
-                } else {
-                    // withdrawal_amount = shares * total_deposits / total_supply
-                    ((shares_amount as u128 * total_deposits as u128) / total_supply as u128) as u64
+                let total_supply = *self.total_supply.borrow();
+                
+                // Handle edge case of no shares in circulation
+                if total_supply == 0 {
+                    return Ok(0);
                 }
+                
+                // Add virtual offsets
+                let total_deposits_with_virtual = total_deposits
+                    .checked_add(VIRTUAL_ASSETS)
+                    .ok_or_else(|| anyhow!("total_deposits_with_virtual overflow"))?;
+                
+                let total_supply_with_virtual = total_supply
+                    .checked_add(VIRTUAL_SHARES)
+                    .ok_or_else(|| anyhow!("total_supply_with_virtual overflow"))?;
+                
+                // Calculate withdrawal amount with virtual offset protection
+                let assets = shares_amount
+                    .checked_mul(total_deposits_with_virtual)
+                    .ok_or_else(|| anyhow!("assets calculation overflow"))?;
+                
+                assets
+                    .checked_div(total_supply_with_virtual)
+                    .ok_or_else(|| anyhow!("division by zero in assets calculation"))
             }
 
-            pub fn deposit(&self, amount: u64, sender: Vec<u8>) -> Result<AlkaneTransfer> {
+            pub fn deposit(&self) -> Result<AlkaneTransfer> {
                 let context = self.context()?;
                 
-                // Validate deposit amount
+                // Verify deposit token is initialized
+                let deposit_token = self.deposit_token.borrow()
+                    .clone()
+                    .ok_or_else(|| anyhow!("deposit token not initialized"))?;
+
+                // Find the deposit transfer
+                let deposit_transfer = context.incoming_alkanes.0.iter()
+                    .find(|transfer| transfer.id == deposit_token)
+                    .ok_or_else(|| anyhow!("deposit transfer not found"))?;
+
+                let amount = deposit_transfer.value;
                 if amount == 0 {
-                    return Err(anyhow!("deposit amount must be greater than zero"));
+                    return Err(anyhow!("cannot deposit zero amount"));
                 }
-                
-                // Calculate shares for the deposit amount
-                let mint_amount = self.calculate_shares(amount);
-                
-                // Get current shares first
-                let current_shares = {
-                    let balances = self.balances.borrow();
-                    match balances.get(&sender) {
-                        Some(balance) => u64::from_le_bytes(balance.as_slice().try_into().unwrap_or([0; 8])),
-                        None => 0
-                    }
-                };
-                
+
+                // Calculate shares
+                let shares = self.calculate_shares(amount)?;
+                if shares == 0 {
+                    return Err(anyhow!("calculated shares amount is zero"));
+                }
+
                 // Update state
                 *self.total_deposits.borrow_mut() += amount;
-                *self.total_supply.borrow_mut() += mint_amount;
+                *self.total_supply.borrow_mut() += shares;
                 
-                // Update shares
+                // Update shares using caller key
+                let caller_key = Self::get_key_for_alkane_id(&context.caller);
+                let current_shares = self.get_shares(&caller_key);
                 let mut balances = self.balances.borrow_mut();
-                balances.set(sender, (current_shares + mint_amount).to_le_bytes().to_vec());
+                let new_balance = current_shares
+                    .checked_add(shares)
+                    .ok_or_else(|| anyhow!("deposit would overflow user balance"))?;
+                balances.set(caller_key, new_balance.to_le_bytes().to_vec());
                 
+                // Return share transfer
                 Ok(AlkaneTransfer {
                     id: context.myself.clone(),
-                    value: mint_amount as u128,
+                    value: shares,
                 })
             }
 
-            pub fn withdraw(&self, shares_amount: u64, sender: Vec<u8>) -> Result<(AlkaneTransfer, AlkaneTransfer)> {
+            pub fn withdraw(&self) -> Result<(AlkaneTransfer, AlkaneTransfer)> {
                 let context = self.context()?;
-                
-                // Get current shares first
-                let current_shares = {
-                    let balances = self.balances.borrow();
-                    match balances.get(&sender) {
-                        Some(balance) => u64::from_le_bytes(balance.as_slice().try_into().unwrap_or([0; 8])),
-                        None => 0
-                    }
-                };
 
-                // Verify user has enough shares
-                if current_shares < shares_amount {
+                // Find the shares transfer
+                let shares_transfer = context.incoming_alkanes.0.iter()
+                    .find(|transfer| transfer.id == context.myself)
+                    .ok_or_else(|| anyhow!("shares transfer not found"))?;
+
+                let shares_to_burn = shares_transfer.value;
+                let caller_key = Self::get_key_for_alkane_id(&context.caller);
+                let current_shares = self.get_shares(&caller_key);
+
+                if current_shares < shares_to_burn {
                     return Err(anyhow!("insufficient shares"));
                 }
 
-                // Calculate withdrawal amount based on shares
-                let withdrawal_amount = self.calculate_withdrawal_amount(shares_amount);
+                let withdrawal_amount = self.calculate_withdrawal_amount(shares_to_burn)?;
                 if withdrawal_amount == 0 {
-                    return Err(anyhow!("zero withdrawal amount"));
+                    return Err(anyhow!("calculated withdrawal amount is zero"));
                 }
 
-                // Get deposit token
                 let deposit_token = self.deposit_token.borrow()
                     .clone()
                     .ok_or_else(|| anyhow!("deposit token not initialized"))?;
 
                 // Update state
-                *self.total_supply.borrow_mut() -= shares_amount;
+                *self.total_supply.borrow_mut() -= shares_to_burn;
                 *self.total_deposits.borrow_mut() -= withdrawal_amount;
                 
                 // Update shares
                 let mut balances = self.balances.borrow_mut();
-                balances.set(sender, (current_shares - shares_amount).to_le_bytes().to_vec());
+                balances.set(caller_key, 
+                    (current_shares - shares_to_burn).to_le_bytes().to_vec());
 
+                // Return both transfers
                 Ok((
                     AlkaneTransfer {
                         id: context.myself.clone(),
-                        value: shares_amount as u128,
+                        value: shares_to_burn,
                     },
                     AlkaneTransfer {
                         id: deposit_token,
-                        value: withdrawal_amount as u128,
+                        value: withdrawal_amount,
                     }
                 ))
             }
 
-            pub fn context(&self) -> Result<Context> {
-                MOCK_CONTEXT.with(|ctx| {
-                    ctx.borrow().clone().ok_or(anyhow!("no context set"))
-                })
+            pub fn preview_deposit(&self, assets: u128) -> Result<u128> {
+                self.calculate_shares(assets)
             }
 
-            pub fn set_mock_context(context: Context) {
-                MOCK_CONTEXT.with(|ctx| {
-                    *ctx.borrow_mut() = Some(context);
-                });
+            pub fn preview_withdraw(&self, shares: u128) -> Result<u128> {
+                self.calculate_withdrawal_amount(shares)
             }
 
-            pub fn preview_deposit(&self, assets: u64) -> u128 {
-                let total_deposits = u128::from(*self.total_deposits.borrow()) + u128::from(VIRTUAL_ASSETS);
-                let total_supply = u128::from(*self.total_supply.borrow()) + u128::from(VIRTUAL_SHARES);
-
-                if total_deposits == u128::from(VIRTUAL_ASSETS) {
-                    // First real deposit after virtual offset
-                    u128::from(assets)
-                } else {
-                    // Calculate shares with high precision and virtual offset protection
-                    (u128::from(assets) * DECIMALS_MULTIPLIER * total_supply) / 
-                    (total_deposits * DECIMALS_MULTIPLIER)
-                }
-            }
-
-            pub fn preview_withdraw(&self, shares: u64) -> u128 {
-                let total_supply = u128::from(*self.total_supply.borrow()) + u128::from(VIRTUAL_SHARES);
-                let total_deposits = u128::from(*self.total_deposits.borrow()) + u128::from(VIRTUAL_ASSETS);
-
-                if total_supply == u128::from(VIRTUAL_SHARES) {
-                    0
-                } else {
-                    // Calculate withdrawal amount with high precision and virtual offset protection
-                    (u128::from(shares) * DECIMALS_MULTIPLIER * total_deposits) / 
-                    (total_supply * DECIMALS_MULTIPLIER)
-                }
-            }
-
-            // Convert a given amount of assets to shares before fees
-            pub fn convert_to_shares(&self, assets: u64) -> u128 {
-                let total_deposits = u128::from(*self.total_deposits.borrow()) + u128::from(VIRTUAL_ASSETS);
-                let total_supply = u128::from(*self.total_supply.borrow()) + u128::from(VIRTUAL_SHARES);
-
-                if total_deposits == u128::from(VIRTUAL_ASSETS) {
-                    u128::from(assets)
-                } else {
-                    (u128::from(assets) * total_supply) / total_deposits
-                }
-            }
-
-            // Convert a given amount of shares to assets before fees
-            pub fn convert_to_assets(&self, shares: u64) -> u128 {
-                let total_supply = u128::from(*self.total_supply.borrow()) + u128::from(VIRTUAL_SHARES);
-                let total_deposits = u128::from(*self.total_deposits.borrow()) + u128::from(VIRTUAL_ASSETS);
-
-                if total_supply == u128::from(VIRTUAL_SHARES) {
-                    0
-                } else {
-                    (u128::from(shares) * total_deposits) / total_supply
-                }
-            }
-
-            // Maximum amount of assets that can be deposited
-            pub fn max_deposit(&self, _user: &[u8]) -> u128 {
-                u128::MAX // Or implement custom deposit limits
-            }
-
-            // Maximum amount of shares that can be minted
-            pub fn max_mint(&self, _user: &[u8]) -> u128 {
-                u128::MAX // Or implement custom minting limits
-            }
-
-            // Maximum amount of shares that can be withdrawn
-            pub fn max_withdraw(&self, user: &[u8]) -> u128 {
-                u128::from(self.get_shares(user))
-            }
-
-            // Maximum amount of shares that can be redeemed
-            pub fn max_redeem(&self, user: &[u8]) -> u128 {
-                u128::from(self.get_shares(user))
-            }
-
-            // Preview mint (similar to preview_deposit but for exact shares)
-            pub fn preview_mint(&self, shares: u64) -> u128 {
-                let total_supply = u128::from(*self.total_supply.borrow()) + u128::from(VIRTUAL_SHARES);
-                let total_deposits = u128::from(*self.total_deposits.borrow()) + u128::from(VIRTUAL_ASSETS);
-
-                if total_supply == u128::from(VIRTUAL_SHARES) {
-                    u128::from(shares)
-                } else {
-                    (u128::from(shares) * total_deposits) / total_supply
-                }
-            }
-
-            // Preview redeem (similar to preview_withdraw but with different rounding)
-            pub fn preview_redeem(&self, shares: u64) -> u128 {
-                self.preview_withdraw(shares)
-            }
-
-            // Get total assets managed by the vault
-            pub fn total_assets(&self) -> u128 {
-                u128::from(*self.total_deposits.borrow())
-            }
-
-            // Mint exact shares, requiring a specific amount of assets
-            pub fn mint(&self, shares: u64, sender: Vec<u8>) -> Result<AlkaneTransfer> {
-                let context = self.context()?;
-                
-                // Calculate required assets for the shares
-                let required_assets = self.preview_mint(shares);
-                if required_assets == 0 {
-                    return Err(anyhow!("cannot mint zero shares"));
-                }
-                
-                // Get current shares
-                let current_shares = {
-                    let balances = self.balances.borrow();
-                    match balances.get(&sender) {
-                        Some(balance) => u64::from_le_bytes(balance.as_slice().try_into().unwrap_or([0; 8])),
-                        None => 0
-                    }
-                };
-                
-                // Update state
-                *self.total_deposits.borrow_mut() += required_assets as u64;
-                *self.total_supply.borrow_mut() += shares;
-                
-                // Update shares
-                let mut balances = self.balances.borrow_mut();
-                balances.set(sender, (current_shares + shares).to_le_bytes().to_vec());
-                
-                Ok(AlkaneTransfer {
-                    id: context.myself.clone(),
-                    value: shares as u128,
-                })
-            }
-
-            // Redeem shares for assets
-            pub fn redeem(&self, shares: u64, sender: Vec<u8>) -> Result<(AlkaneTransfer, AlkaneTransfer)> {
-                let context = self.context()?;
-                
-                // Calculate assets to return
-                let assets_to_return = self.preview_redeem(shares);
-                if assets_to_return == 0 {
-                    return Err(anyhow!("cannot redeem zero assets"));
-                }
-                
-                // Get current shares
-                let current_shares = {
-                    let balances = self.balances.borrow();
-                    match balances.get(&sender) {
-                        Some(balance) => u64::from_le_bytes(balance.as_slice().try_into().unwrap_or([0; 8])),
-                        None => 0
-                    }
-                };
-
-                // Verify user has enough shares
-                if current_shares < shares {
-                    return Err(anyhow!("insufficient shares"));
-                }
-
-                // Get deposit token
-                let deposit_token = self.deposit_token.borrow()
-                    .clone()
-                    .ok_or_else(|| anyhow!("deposit token not initialized"))?;
-
-                // Update state
-                *self.total_supply.borrow_mut() -= shares;
-                *self.total_deposits.borrow_mut() -= assets_to_return as u64;
-                
-                // Update shares
-                let mut balances = self.balances.borrow_mut();
-                balances.set(sender, (current_shares - shares).to_le_bytes().to_vec());
-
-                Ok((
-                    AlkaneTransfer {
-                        id: context.myself.clone(),
-                        value: shares as u128,
-                    },
-                    AlkaneTransfer {
-                        id: deposit_token,
-                        value: assets_to_return,
-                    }
-                ))
+            pub fn get_total_assets(&self) -> u128 {
+                *self.total_deposits.borrow()
             }
         }
 
@@ -343,15 +227,60 @@ pub mod alkanes {
             fn execute(&self) -> Result<CallResponse> {
                 let context = self.context()?;
                 let mut inputs = context.inputs.clone();
-                let response = CallResponse::forward(&context.incoming_alkanes);
+
                 match shift_or_err(&mut inputs)? {
+                    /* receive() - just accept incoming alkanes */
                     0 => {
-                        let mut deposit_token = self.deposit_token.borrow_mut();
-                        *deposit_token = Some(AlkaneId::new(1, 2));
+                        Ok(CallResponse::default())
+                    },
+                    /* deposit() */
+                    1 => {
+                        let mut response = CallResponse::default();
+                        response.alkanes.0.push(self.deposit()?);
                         Ok(response)
-                    }
-                    _ => Err(anyhow!("unrecognized opcode")),
+                    },
+                    /* withdraw() */
+                    2 => {
+                        let mut response = CallResponse::default();
+                        let (shares_transfer, assets_transfer) = self.withdraw()?;
+                        response.alkanes.0.push(shares_transfer);
+                        response.alkanes.0.push(assets_transfer);
+                        Ok(response)
+                    },
+                    /* preview_deposit(assets) */
+                    3 => {
+                        let assets = shift_or_err(&mut inputs)?;
+                        let mut response = CallResponse::default();
+                        response.data = self.preview_deposit(assets)?.to_le_bytes().to_vec();
+                        Ok(response)
+                    },
+                    /* preview_withdraw(shares) */
+                    4 => {
+                        let shares = shift_or_err(&mut inputs)?;
+                        let mut response = CallResponse::default();
+                        response.data = self.preview_withdraw(shares)?.to_le_bytes().to_vec();
+                        Ok(response)
+                    },
+                    /* get_shares(owner) */
+                    5 => {
+                        let owner = shift_or_err(&mut inputs)?;
+                        let mut response = CallResponse::default();
+                        let owner_key = owner.to_le_bytes();
+                        response.data = self.get_shares(&owner_key).to_le_bytes().to_vec();
+                        Ok(response)
+                    },
+                    /* Any other opcode */
+                    _ => Ok(CallResponse::default()),
                 }
+            }
+        }
+
+        #[cfg(test)]
+        impl DxBtc {
+            pub fn set_mock_context(context: Context) {
+                MOCK_CONTEXT.with(|c| {
+                    *c.borrow_mut() = Some(context);
+                });
             }
         }
     }
