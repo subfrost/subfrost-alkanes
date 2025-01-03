@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::alkanes::dxbtc::DxBtc;
+    use dx_btc::DxBtc;
     use alkanes_support::context::Context;
     use alkanes_support::id::AlkaneId;
     use alkanes_support::parcel::{AlkaneTransfer, AlkaneTransferParcel};

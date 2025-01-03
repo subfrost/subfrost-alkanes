@@ -1863,6 +1863,7 @@ dependencies = [
  "alkanes-support",
  "anyhow",
  "bitcoin 0.32.5",
+ "dx-btc",
  "flate2",
  "hex",
  "hex_lit",
