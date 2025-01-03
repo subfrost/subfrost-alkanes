@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use alkanes_support::id::AlkaneId;
+    use dx_btc::DxBtc;
     use alkanes_support::context::Context;
     use alkanes_support::parcel::AlkaneTransfer;
     use alkanes_runtime::runtime::AlkaneResponder;

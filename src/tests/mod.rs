@@ -1,11 +1,5 @@
 #[cfg(any(feature = "test-utils", test))]
 pub mod helpers;
-
-#[cfg(test)]
-pub mod utils;
-
-#[cfg(test)]
-pub mod alkane;
-
-#[cfg(test)]
-pub mod dxbtc;
+pub mod payment_tests;
+pub mod core_tests;
+pub mod dxbtc_tests;
