@@ -18,3 +18,4 @@ token-support = { path = "../../crates/token-support" }
 ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
 anyhow = "1.0.94"
 bitcoin = { version = "0.32.4", features = ["rand"] }
+wasm-bindgen-test = "0.3.0"

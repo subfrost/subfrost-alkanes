@@ -644,6 +644,7 @@ dependencies = [
  "ordinals 0.0.10",
  "protorune-support",
  "token-support",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
