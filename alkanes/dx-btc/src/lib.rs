@@ -30,6 +30,13 @@ pub mod alkanes {
                 Context::parse(&mut cursor)
             }
 
+            fn get_key_for_alkane_id(id: &AlkaneId) -> Vec<u8> {
+                let mut key = Vec::with_capacity(16);
+                key.extend_from_slice(&id.block.to_le_bytes());
+                key.extend_from_slice(&id.tx.to_le_bytes());
+                key
+            }
+
             pub fn get_shares(&self, owner: &[u8]) -> u128 {
                 let balances = self.balances.borrow();
                 match balances.get(owner) {
@@ -127,13 +134,14 @@ pub mod alkanes {
                 *self.total_deposits.borrow_mut() += amount;
                 *self.total_supply.borrow_mut() += shares;
                 
-                // Update shares
-                let current_shares = self.get_shares(&context.caller.to_le_bytes());
+                // Update shares using caller key
+                let caller_key = Self::get_key_for_alkane_id(&context.caller);
+                let current_shares = self.get_shares(&caller_key);
                 let mut balances = self.balances.borrow_mut();
                 let new_balance = current_shares
                     .checked_add(shares)
                     .ok_or_else(|| anyhow!("deposit would overflow user balance"))?;
-                balances.set(context.caller.to_le_bytes().to_vec(), new_balance.to_le_bytes().to_vec());
+                balances.set(caller_key, new_balance.to_le_bytes().to_vec());
                 
                 // Return share transfer
                 Ok(AlkaneTransfer {
@@ -151,7 +159,8 @@ pub mod alkanes {
                     .ok_or_else(|| anyhow!("shares transfer not found"))?;
 
                 let shares_to_burn = shares_transfer.value;
-                let current_shares = self.get_shares(&context.caller.to_le_bytes());
+                let caller_key = Self::get_key_for_alkane_id(&context.caller);
+                let current_shares = self.get_shares(&caller_key);
 
                 if current_shares < shares_to_burn {
                     return Err(anyhow!("insufficient shares"));
@@ -172,7 +181,7 @@ pub mod alkanes {
                 
                 // Update shares
                 let mut balances = self.balances.borrow_mut();
-                balances.set(context.caller.to_le_bytes().to_vec(), 
+                balances.set(caller_key, 
                     (current_shares - shares_to_burn).to_le_bytes().to_vec());
 
                 // Return both transfers
@@ -243,10 +252,12 @@ pub mod alkanes {
                     5 => {
                         let owner = shift_or_err(&mut inputs)?;
                         let mut response = CallResponse::default();
-                        response.data = self.get_shares(&owner.to_le_bytes()).to_le_bytes().to_vec();
+                        let owner_key = owner.to_le_bytes();
+                        response.data = self.get_shares(&owner_key).to_le_bytes().to_vec();
                         Ok(response)
                     },
-                    _ => Err(anyhow!("unrecognized opcode")),
+                    /* Any other opcode */
+                    _ => Ok(CallResponse::default()),
                 }
             }
         }
@@ -255,6 +266,116 @@ pub mod alkanes {
         pub extern "C" fn __execute() -> i32 {
             let mut response = to_arraybuffer_layout(&DxBtc::default().run());
             to_ptr(&mut response) + 4
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+            use wasm_bindgen_test::*;
+
+            fn setup_token() -> (DxBtc, Context) {
+                let token = DxBtc::default();
+                let context = Context {
+                    myself: AlkaneId::new(1, 1),
+                    inputs: vec![],
+                    incoming_alkanes: AlkaneTransferParcel::default(),
+                    caller: AlkaneId::new(1, 3),
+                    vout: 0,
+                };
+                
+                // Initialize deposit token
+                let deposit_token = AlkaneId::new(1, 2);
+                *token.deposit_token.borrow_mut() = Some(deposit_token.clone());
+                
+                DxBtc::set_mock_context(context.clone());
+                (token, context)
+            }
+
+            fn setup_incoming_deposit(context: &mut Context, amount: u128) {
+                let deposit_token = AlkaneId::new(1, 2);
+                context.incoming_alkanes.0.push(AlkaneTransfer {
+                    id: deposit_token,
+                    value: amount,
+                });
+                DxBtc::set_mock_context(context.clone());
+            }
+
+            #[wasm_bindgen_test]
+            fn test_deposit_flow() -> Result<()> {
+                let (token, mut context) = setup_token();
+                
+                // Test receive opcode
+                let response = token.execute()?;
+                assert!(response.alkanes.0.is_empty(), "Receive should return empty response");
+                
+                // Test deposit
+                let deposit_amount = 1000;
+                setup_incoming_deposit(&mut context, deposit_amount);
+                
+                let mut inputs = vec![1]; // deposit opcode
+                context.inputs = inputs;
+                DxBtc::set_mock_context(context.clone());
+                
+                let response = token.execute()?;
+                assert_eq!(response.alkanes.0.len(), 1, "Deposit should return one transfer");
+                assert_eq!(response.alkanes.0[0].value, deposit_amount, "Should get 1:1 shares for first deposit");
+                
+                // Verify state
+                let caller_key = DxBtc::get_key_for_alkane_id(&context.caller);
+                assert_eq!(token.get_shares(&caller_key), deposit_amount, "Caller should have correct shares");
+                assert_eq!(*token.total_supply.borrow(), deposit_amount, "Total supply should match deposit");
+                assert_eq!(*token.total_deposits.borrow(), deposit_amount, "Total deposits should match deposit");
+                
+                Ok(())
+            }
+
+            #[wasm_bindgen_test]
+            fn test_withdraw_flow() -> Result<()> {
+                let (token, mut context) = setup_token();
+                
+                // First deposit to have something to withdraw
+                let deposit_amount = 1000;
+                setup_incoming_deposit(&mut context, deposit_amount);
+                token.deposit()?;
+                
+                // Now withdraw
+                let shares_to_withdraw = 500;
+                context.incoming_alkanes.0.clear();
+                context.incoming_alkanes.0.push(AlkaneTransfer {
+                    id: context.myself.clone(),
+                    value: shares_to_withdraw,
+                });
+                
+                let mut inputs = vec![2]; // withdraw opcode
+                context.inputs = inputs;
+                DxBtc::set_mock_context(context.clone());
+                
+                let response = token.execute()?;
+                assert_eq!(response.alkanes.0.len(), 2, "Withdraw should return two transfers");
+                
+                // Verify state
+                let caller_key = DxBtc::get_key_for_alkane_id(&context.caller);
+                assert_eq!(token.get_shares(&caller_key), deposit_amount - shares_to_withdraw, 
+                    "Caller should have correct remaining shares");
+                
+                Ok(())
+            }
+
+            #[wasm_bindgen_test]
+            fn test_preview_operations() -> Result<()> {
+                let (token, mut context) = setup_token();
+                
+                let amount = 1000;
+                let mut inputs = vec![3, amount]; // preview_deposit opcode
+                context.inputs = inputs;
+                DxBtc::set_mock_context(context.clone());
+                
+                let response = token.execute()?;
+                let preview_shares = u128::from_le_bytes(response.data.try_into().unwrap());
+                assert_eq!(preview_shares, amount, "First deposit preview should be 1:1");
+                
+                Ok(())
+            }
         }
     }
 }
