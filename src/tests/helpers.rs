@@ -1,5 +1,7 @@
 use bitcoin::address::{Address, NetworkChecked};
 use std::str::FromStr;
+use alkanes_support::context::Context;
+use alkanes_support::id::AlkaneId;
 
 pub fn get_test_address(name: &str) -> Address<NetworkChecked> {
     match name {
@@ -12,4 +14,22 @@ pub fn get_test_address(name: &str) -> Address<NetworkChecked> {
 
 pub fn clear_test_environment() {
     // For now, we'll leave this empty as we're focusing on the basic test functionality
+}
+
+// Trait for common test functionality
+pub trait AlkaneTest {
+    fn get_deposit_token(&self) -> AlkaneId;
+    fn set_mock_context(context: Context);
+}
+
+// Helper function to create a test context
+pub fn create_test_context(myself: AlkaneId, caller: AlkaneId) -> Context {
+    Context {
+        myself,
+        caller,
+        incoming_alkanes: Default::default(),
+        inputs: vec![],
+        vout: Default::default(),
+        // Add other Context fields as needed with default values
+    }
 } 

@@ -308,12 +308,3 @@ impl AlkaneResponder for DxBtc {
         }
     }
 }
-
-#[cfg(test)]
-impl DxBtc {
-    pub fn set_mock_context(context: Context) {
-        MOCK_CONTEXT.with(|c| {
-            *c.borrow_mut() = Some(context);
-        });
-    }
-} 

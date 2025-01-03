@@ -24,7 +24,7 @@ pub struct DxBtc {
 }
 
 impl DxBtc {
-    fn get_key_for_alkane_id(id: &AlkaneId) -> Vec<u8> {
+    pub fn get_key_for_alkane_id(id: &AlkaneId) -> Vec<u8> {
         let mut key = Vec::with_capacity(16);
         key.extend_from_slice(&id.block.to_le_bytes());
         key.extend_from_slice(&id.tx.to_le_bytes());
