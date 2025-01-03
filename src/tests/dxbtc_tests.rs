@@ -169,4 +169,95 @@ mod tests {
         
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn test_withdrawal_safety() -> Result<()> {
+        let (token, mut context) = setup_token();
+        
+        // First deposit
+        setup_incoming_deposit(&mut context, 1000);
+        context.inputs = vec![1];
+        DxBtc::set_mock_context(context.clone());
+        token.execute()?;
+        
+        // Test withdrawal with insufficient shares
+        context.incoming_alkanes.0.clear();
+        context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: context.myself.clone(),
+            value: 2000,  // More than deposited
+        });
+        context.inputs = vec![2];  // withdraw opcode
+        DxBtc::set_mock_context(context.clone());
+        assert!(token.execute().is_err(), "Should fail with insufficient shares");
+
+        // Test withdrawal with zero shares
+        context.incoming_alkanes.0.clear();
+        context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: context.myself.clone(),
+            value: 0,
+        });
+        DxBtc::set_mock_context(context.clone());
+        assert!(token.execute().is_err(), "Should fail with zero shares");
+
+        // Test full withdrawal
+        context.incoming_alkanes.0.clear();
+        context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: context.myself.clone(),
+            value: 1000,
+        });
+        DxBtc::set_mock_context(context.clone());
+        let response = token.execute()?;
+        assert_eq!(response.alkanes.0.len(), 2, "Full withdrawal should return two transfers");
+        
+        let caller_key = DxBtc::get_key_for_alkane_id(&context.caller);
+        assert_eq!(token.get_shares(&caller_key), 0, "Balance should be zero after full withdrawal");
+        
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn test_state_consistency() -> Result<()> {
+        let (token, mut context) = setup_token();
+        
+        // Multiple deposits from different users
+        let first_user = context.caller.clone();
+        setup_incoming_deposit(&mut context, 1000);
+        context.inputs = vec![1];
+        DxBtc::set_mock_context(context.clone());
+        token.execute()?;
+        
+        // Second user deposit
+        context.caller = AlkaneId::new(1, 4);
+        setup_incoming_deposit(&mut context, 500);
+        DxBtc::set_mock_context(context.clone());
+        token.execute()?;
+        
+        // Verify total supply matches sum of balances
+        let first_user_shares = token.get_shares(&DxBtc::get_key_for_alkane_id(&first_user));
+        let second_user_shares = token.get_shares(&DxBtc::get_key_for_alkane_id(&context.caller));
+        assert_eq!(*token.total_supply.borrow(), first_user_shares + second_user_shares,
+            "Total supply should match sum of balances");
+        
+        // Verify total deposits is accurate
+        assert_eq!(*token.total_deposits.borrow(), 1500,
+            "Total deposits should be accurate");
+            
+        // Test state after failed operation
+        context.incoming_alkanes.0.clear();
+        context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: context.myself.clone(),
+            value: 1000,  // More than user has
+        });
+        context.inputs = vec![2];  // withdraw opcode
+        DxBtc::set_mock_context(context.clone());
+        assert!(token.execute().is_err());
+        
+        // Verify state hasn't changed after failed operation
+        assert_eq!(*token.total_supply.borrow(), first_user_shares + second_user_shares,
+            "Total supply should be unchanged after failed operation");
+        assert_eq!(*token.total_deposits.borrow(), 1500,
+            "Total deposits should be unchanged after failed operation");
+        
+        Ok(())
+    }
 } 
