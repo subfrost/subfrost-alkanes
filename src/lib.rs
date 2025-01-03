@@ -6,8 +6,6 @@ mod test {
     use crate::tests::dxbtc;
     use wasm_bindgen_test::*;
 
-    wasm_bindgen_test_configure!(run_in_browser);
-
     #[wasm_bindgen_test]
     fn test_dxbtc_deposit_flow() {
         dxbtc::tests::test_deposit_flow().unwrap();
