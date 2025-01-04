@@ -4,7 +4,6 @@ mod tests {
     use alkanes_support::context::Context;
     use alkanes_support::id::AlkaneId;
     use alkanes_support::parcel::{AlkaneTransfer, AlkaneTransferParcel};
-    use alkanes_runtime::runtime::AlkaneResponder;
     use anyhow::Result;
     use wasm_bindgen_test::*;
 

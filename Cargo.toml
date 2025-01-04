@@ -20,7 +20,6 @@ members = ["crates/*", ".", "alkanes/*"]
 
 [dependencies]
 alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
-alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
 metashrew-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 types-support = { path = "crates/types-support" }
@@ -34,8 +33,9 @@ once_cell = "1.19.0"
 alkanes = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
 metashrew = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
 protorune = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
-dx-btc = { path = "./alkanes/dx-btc" }
+dx-btc = { path = "./alkanes/dx-btc", features = ["test"] }
 hex_lit = "0.1.1"
+wasm-bindgen-test = "0.3.49"
 
 [build-dependencies]
 anyhow = "1.0.90"

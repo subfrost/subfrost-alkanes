@@ -669,7 +669,6 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 name = "dx-btc"
 version = "0.1.0"
 dependencies = [
- "alkanes-runtime",
  "alkanes-support",
  "anyhow",
  "bitcoin 0.32.5",
@@ -677,6 +676,7 @@ dependencies = [
  "ordinals 0.0.10",
  "protorune-support",
  "token-support",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
@@ -1859,7 +1859,6 @@ name = "subfrost-alkanes"
 version = "0.1.0"
 dependencies = [
  "alkanes",
- "alkanes-runtime",
  "alkanes-support",
  "anyhow",
  "bitcoin 0.32.5",

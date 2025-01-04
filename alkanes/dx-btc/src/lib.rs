@@ -1,15 +1,16 @@
-use alkanes_runtime::{declare_alkane, runtime::AlkaneResponder};
-use metashrew_support::compat::{to_passback_ptr};
-pub use alkanes_support::context::Context;
-pub use alkanes_support::id::AlkaneId;
-pub use alkanes_support::parcel::AlkaneTransfer;
-pub use alkanes_support::response::CallResponse;
-pub use alkanes_support::storage::StorageMap;
-pub use alkanes_support::utils::shift_or_err;
+use alkanes_support::context::Context;
+use alkanes_support::id::AlkaneId;
+use alkanes_support::parcel::AlkaneTransfer;
+use alkanes_support::response::CallResponse;
+use alkanes_support::storage::StorageMap;
+use alkanes_support::utils::shift_or_err;
 use anyhow::{anyhow, Result};
-use metashrew_support::compat::{to_arraybuffer_layout, to_ptr};
 use std::cell::RefCell;
-use std::io::Cursor;
+use std::thread_local;
+
+thread_local! {
+    static MOCK_CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
+}
 
 // Constants for virtual offset protection
 pub const VIRTUAL_SHARES: u128 = 1_000_000; // 1M virtual shares
@@ -24,7 +25,7 @@ pub struct DxBtc {
 }
 
 impl DxBtc {
-    fn get_key_for_alkane_id(id: &AlkaneId) -> Vec<u8> {
+    pub fn get_key_for_alkane_id(id: &AlkaneId) -> Vec<u8> {
         let mut key = Vec::with_capacity(16);
         key.extend_from_slice(&id.block.to_le_bytes());
         key.extend_from_slice(&id.tx.to_le_bytes());
@@ -100,8 +101,16 @@ impl DxBtc {
             .ok_or_else(|| anyhow!("division by zero in assets calculation"))
     }
 
+    fn get_context() -> Result<Context> {
+        MOCK_CONTEXT.with(|ctx| {
+            ctx.borrow()
+                .clone()
+                .ok_or_else(|| anyhow!("Context not set"))
+        })
+    }
+
     pub fn deposit(&self) -> Result<AlkaneTransfer> {
-        let context = self.context()?;
+        let context = Self::get_context()?;
 
         // Verify deposit token is initialized
         let deposit_token = self
@@ -150,7 +159,7 @@ impl DxBtc {
     }
 
     pub fn withdraw(&self) -> Result<(AlkaneTransfer, AlkaneTransfer)> {
-        let context = self.context()?;
+        let context = Self::get_context()?;
 
         // Find the shares transfer
         let shares_transfer = context
@@ -214,11 +223,9 @@ impl DxBtc {
     pub fn get_total_assets(&self) -> u128 {
         *self.total_deposits.borrow()
     }
-}
 
-impl AlkaneResponder for DxBtc {
-    fn execute(&self) -> Result<CallResponse> {
-        let context = self.context()?;
+    pub fn execute(&self) -> Result<CallResponse> {
+        let context = Self::get_context()?;
         let mut inputs = context.inputs.clone();
 
         match shift_or_err(&mut inputs)? {
@@ -252,18 +259,13 @@ impl AlkaneResponder for DxBtc {
                 response.data = self.preview_withdraw(shares)?.to_le_bytes().to_vec();
                 Ok(response)
             }
-            /* get_shares(owner) */
-            5 => {
-                let owner = shift_or_err(&mut inputs)?;
-                let mut response = CallResponse::default();
-                let owner_key = owner.to_le_bytes();
-                response.data = self.get_shares(&owner_key).to_le_bytes().to_vec();
-                Ok(response)
-            }
-            /* Any other opcode */
-            _ => Ok(CallResponse::default()),
+            _ => Err(anyhow!("invalid opcode")),
         }
     }
-}
 
-declare_alkane! {DxBtc}
+    pub fn set_mock_context(context: Context) {
+        MOCK_CONTEXT.with(|ctx| {
+            *ctx.borrow_mut() = Some(context);
+        });
+    }
+}

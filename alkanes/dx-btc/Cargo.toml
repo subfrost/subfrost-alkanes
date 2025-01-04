@@ -10,11 +10,14 @@ crate-type = ["cdylib", "rlib"]
 test = []
 
 [dependencies]
-alkanes-support = { git = "https:/github.com/kungfuflex/alkanes-rs" }
-alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
+alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 metashrew-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 token-support = { path = "../../crates/token-support" }
 ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
 anyhow = "1.0.94"
 bitcoin = { version = "0.32.4", features = ["rand"] }
+wasm-bindgen-test = "0.3.49"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.49"
