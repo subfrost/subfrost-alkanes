@@ -116,11 +116,16 @@ mod tests {
         
         // The share ratio should be determined by the vault state, not artificially constrained
         let shares = response.alkanes.0[0].value;
-        let expected_shares = token.preview_deposit(1000)?;
+        context.inputs = vec![3, 1000];  // preview_deposit opcode with amount
+        DxBtc::set_mock_context(context.clone());
+        let preview_response = token.execute()?;
+        let expected_shares = u128::from_le_bytes(preview_response.data.try_into().unwrap());
         assert_eq!(shares, expected_shares, "Actual shares should match preview");
 
         // Test extreme values
         setup_incoming_deposit(&mut context, u128::MAX / 2);
+        context.inputs = vec![1];  // deposit opcode
+        DxBtc::set_mock_context(context.clone());
         assert!(token.execute().is_err(), "Should handle extreme values safely");
 
         Ok(())
@@ -137,7 +142,7 @@ mod tests {
         DxBtc::set_mock_context(context.clone());
         token.execute()?;
         
-        // Now withdraw
+        // Now withdraw half
         let shares_to_withdraw = 500;
         context.incoming_alkanes.0.clear();
         context.incoming_alkanes.0.push(AlkaneTransfer {
@@ -151,10 +156,22 @@ mod tests {
         let response = token.execute()?;
         assert_eq!(response.alkanes.0.len(), 2, "Withdraw should return two transfers");
         
+        // First transfer should be the shares being burned
+        assert_eq!(response.alkanes.0[0].value, shares_to_withdraw, "Should burn correct amount of shares");
+        assert_eq!(response.alkanes.0[0].id, context.myself, "First transfer should be shares");
+        
+        // Second transfer should be the assets being returned
+        assert_eq!(response.alkanes.0[1].value, shares_to_withdraw, "Should return correct amount of assets");
+        assert_eq!(response.alkanes.0[1].id, AlkaneId::new(1, 2), "Second transfer should be deposit token");
+        
         // Verify state
         let caller_key = DxBtc::get_key_for_alkane_id(&context.caller);
         assert_eq!(token.get_shares(&caller_key), deposit_amount - shares_to_withdraw, 
             "Caller should have correct remaining shares");
+        assert_eq!(*token.total_supply.borrow(), deposit_amount - shares_to_withdraw,
+            "Total supply should be reduced");
+        assert_eq!(*token.total_deposits.borrow(), deposit_amount - shares_to_withdraw,
+            "Total deposits should be reduced");
         
         Ok(())
     }
@@ -163,6 +180,7 @@ mod tests {
     fn test_preview_operations() -> Result<()> {
         let (token, mut context) = setup_token();
         
+        // Test preview deposit with empty vault (1:1 ratio)
         let amount = 1000;
         context.inputs = vec![3, amount];  // preview_deposit opcode
         DxBtc::set_mock_context(context.clone());
@@ -170,6 +188,33 @@ mod tests {
         let response = token.execute()?;
         let preview_shares = u128::from_le_bytes(response.data.try_into().unwrap());
         assert_eq!(preview_shares, amount, "First deposit preview should be 1:1");
+        
+        // Make a deposit to test preview with existing shares
+        setup_incoming_deposit(&mut context, amount);
+        context.inputs = vec![1];  // deposit opcode
+        DxBtc::set_mock_context(context.clone());
+        let deposit_response = token.execute()?;
+        let actual_shares = deposit_response.alkanes.0[0].value;
+        assert_eq!(actual_shares, preview_shares, "Actual deposit should match preview");
+        
+        // Test preview withdraw
+        context.inputs = vec![4, actual_shares];  // preview_withdraw opcode
+        DxBtc::set_mock_context(context.clone());
+        let response = token.execute()?;
+        let preview_assets = u128::from_le_bytes(response.data.try_into().unwrap());
+        assert_eq!(preview_assets, amount, "Withdraw preview should match original deposit");
+        
+        // Verify preview with actual withdrawal
+        context.incoming_alkanes.0.clear();
+        context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: context.myself.clone(),
+            value: actual_shares,
+        });
+        context.inputs = vec![2];  // withdraw opcode
+        DxBtc::set_mock_context(context.clone());
+        let withdraw_response = token.execute()?;
+        assert_eq!(withdraw_response.alkanes.0[1].value, preview_assets, 
+            "Actual withdrawal should match preview");
         
         Ok(())
     }
@@ -213,8 +258,11 @@ mod tests {
         let response = token.execute()?;
         assert_eq!(response.alkanes.0.len(), 2, "Full withdrawal should return two transfers");
         
+        // Verify state after full withdrawal
         let caller_key = DxBtc::get_key_for_alkane_id(&context.caller);
         assert_eq!(token.get_shares(&caller_key), 0, "Balance should be zero after full withdrawal");
+        assert_eq!(*token.total_supply.borrow(), 0, "Total supply should be zero after full withdrawal");
+        assert_eq!(*token.total_deposits.borrow(), 0, "Total deposits should be zero after full withdrawal");
         
         Ok(())
     }
