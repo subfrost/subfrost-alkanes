@@ -7,6 +7,7 @@ use alkanes_support::utils::shift_or_err;
 use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::thread_local;
+use std::collections::HashMap;
 
 thread_local! {
     static MOCK_CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
@@ -15,6 +16,7 @@ thread_local! {
 // Constants for virtual offset protection
 pub const VIRTUAL_SHARES: u128 = 1_000_000; // 1M virtual shares
 pub const VIRTUAL_ASSETS: u128 = 1_000_000; // 1M virtual assets
+pub const SHARE_PRECISION_OFFSET: u128 = 1_000_000_000; // 1e9 precision offset for shares
 
 #[derive(Default)]
 pub struct DxBtc {
@@ -25,6 +27,15 @@ pub struct DxBtc {
 }
 
 impl DxBtc {
+    pub fn new() -> Self {
+        Self {
+            deposit_token: RefCell::new(Some(AlkaneId::new(1, 2))), // BTC token
+            total_supply: RefCell::new(0),
+            total_deposits: RefCell::new(0),
+            balances: RefCell::new(Default::default()),
+        }
+    }
+
     pub fn get_key_for_alkane_id(id: &AlkaneId) -> Vec<u8> {
         let mut key = Vec::with_capacity(16);
         key.extend_from_slice(&id.block.to_le_bytes());
@@ -48,12 +59,13 @@ impl DxBtc {
         let total_deposits = *self.total_deposits.borrow();
         let total_supply = *self.total_supply.borrow();
 
-        // For first deposit, give 1:1 shares
+        // For first deposit, give shares with precision offset
         if total_supply == 0 {
-            return Ok(deposit_amount);
+            return Ok(deposit_amount.checked_mul(SHARE_PRECISION_OFFSET)
+                .ok_or_else(|| anyhow!("share precision calculation overflow"))?);
         }
 
-        // Add virtual offsets for subsequent deposits
+        // Add virtual offsets
         let total_deposits_with_virtual = total_deposits
             .checked_add(VIRTUAL_ASSETS)
             .ok_or_else(|| anyhow!("total_deposits_with_virtual overflow"))?;
@@ -62,7 +74,7 @@ impl DxBtc {
             .checked_add(VIRTUAL_SHARES)
             .ok_or_else(|| anyhow!("total_supply_with_virtual overflow"))?;
 
-        // Calculate shares with virtual offset protection
+        // Calculate shares with virtual offset protection and precision offset
         let shares = deposit_amount
             .checked_mul(total_supply_with_virtual)
             .ok_or_else(|| anyhow!("shares calculation overflow"))?;
@@ -92,13 +104,13 @@ impl DxBtc {
             .ok_or_else(|| anyhow!("total_supply_with_virtual overflow"))?;
 
         // Calculate withdrawal amount with virtual offset protection
-        let assets = shares_amount
-            .checked_mul(total_deposits_with_virtual)
-            .ok_or_else(|| anyhow!("assets calculation overflow"))?;
+        let withdrawal_amount = shares_amount
+            .checked_mul(total_deposits)
+            .ok_or_else(|| anyhow!("withdrawal amount calculation overflow"))?
+            .checked_div(total_supply)
+            .ok_or_else(|| anyhow!("division by zero in withdrawal calculation"))?;
 
-        assets
-            .checked_div(total_supply_with_virtual)
-            .ok_or_else(|| anyhow!("division by zero in assets calculation"))
+        Ok(withdrawal_amount)
     }
 
     fn get_context() -> Result<Context> {
@@ -172,6 +184,12 @@ impl DxBtc {
         let shares_to_burn = shares_transfer.value;
         let caller_key = Self::get_key_for_alkane_id(&context.caller);
         let current_shares = self.get_shares(&caller_key);
+
+        println!("Withdraw debug:");
+        println!("  shares_to_burn: {}", shares_to_burn);
+        println!("  current_shares: {}", current_shares);
+        println!("  total_supply: {}", *self.total_supply.borrow());
+        println!("  total_deposits: {}", *self.total_deposits.borrow());
 
         if current_shares < shares_to_burn {
             return Err(anyhow!("insufficient shares"));
