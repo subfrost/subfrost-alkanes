@@ -6,13 +6,10 @@ mod tests {
     use alkanes_support::{cellpack::Cellpack, constants::AUTH_TOKEN_FACTORY_ID};
     use alkanes_support::id::AlkaneId;
     use anyhow::Result;
-    use hex;
-    use metashrew_support::index_pointer::KeyValuePointer;
 
-    use alkanes::index_block;
+    use alkanes::indexer::index_block;
     use alkanes::tests::helpers as alkane_helpers;
     use alkane_helpers::clear;
-    use alkanes_support::gz::{compress, decompress};
     #[allow(unused_imports)]
     use metashrew::{
 	index_pointer::IndexPointer,
@@ -47,12 +44,12 @@ mod tests {
             }
 	];
 
-	let test_block = alkane_helpers::init_with_multiple_cellpacks_and_tx([
+	let test_block = alkane_helpers::init_with_multiple_cellpacks_with_tx([
           alkanes_std_auth_token_build::get_bytes(),
           owned_token_build::get_bytes(),
           [].into(),
-          dx_btc_token_build::get_bytes()
-        ], test_cellpacks.to_vec());
+          dx_btc_build::get_bytes()
+        ].into(), test_cellpacks.to_vec());
 	index_block(&test_block, block_height as u32)?;
 	Ok(())
     }
