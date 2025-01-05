@@ -1,178 +1,182 @@
 #[cfg(test)]
 mod tests {
-    use dx_btc::{DxBtc, SHARE_PRECISION_OFFSET, VIRTUAL_SHARES, VIRTUAL_ASSETS};
+    use dx_btc::{DxBtc, SHARE_PRECISION_OFFSET, VIRTUAL_ASSETS, MIN_DEPOSIT, MOCK_CONTEXT};
     use alkanes_support::context::Context;
     use alkanes_support::id::AlkaneId;
-    use alkanes_support::parcel::{AlkaneTransfer, AlkaneTransferParcel};
+    use alkanes_support::parcel::AlkaneTransfer;
+    use std::io::Cursor;
     use anyhow::Result;
-    use wasm_bindgen_test::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    fn setup_token() -> (DxBtc, Context) {
-        let token = DxBtc::new();
-        let context = Context {
-            myself: AlkaneId::new(1, 1),
-            inputs: vec![],
-            incoming_alkanes: AlkaneTransferParcel::default(),
-            caller: AlkaneId::new(1, 3),
-            vout: 0,
-        };
-        
-        // Initialize deposit token
-        let deposit_token = AlkaneId::new(1, 2);
-        *token.deposit_token.borrow_mut() = Some(deposit_token.clone());
-        
-        DxBtc::set_mock_context(context.clone());
-        (token, context)
+    fn setup_context() -> Result<Context> {
+        // Initialize with a 1KB buffer
+        let buffer = vec![0u8; 1024];
+        let mut cursor = Cursor::new(buffer);
+        Context::parse(&mut cursor)
     }
 
-    fn setup_incoming_deposit(context: &mut Context, amount: u128) {
-        let deposit_token = AlkaneId::new(1, 2);
-        context.incoming_alkanes.0.clear();  // Clear previous transfers
-        context.incoming_alkanes.0.push(AlkaneTransfer {
+    fn setup_deposit_context(amount: u128) -> Result<Context> {
+        let mut context = setup_context()?;
+        let deposit_token = AlkaneId::new(1, 2); // BTC token
+        let deposit_transfer = AlkaneTransfer {
             id: deposit_token,
             value: amount,
-        });
-        DxBtc::set_mock_context(context.clone());
+        };
+        context.incoming_alkanes.0.push(deposit_transfer);
+        Ok(context)
     }
 
     #[wasm_bindgen_test]
-    fn test_deposit_flow() -> Result<()> {
-        let (vault, mut context) = setup_token();
-        let deposit_amount = 1000;
+    async fn test_deposit_flow() -> Result<()> {
+        let context = setup_deposit_context(MIN_DEPOSIT)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
 
-        // First deposit should get shares with precision offset
-        let shares = vault.preview_deposit(deposit_amount)?;
-        assert_eq!(shares, deposit_amount * SHARE_PRECISION_OFFSET);
-
-        // Setup and execute deposit
-        setup_incoming_deposit(&mut context, deposit_amount);
-        let deposit_result = vault.deposit()?;
-        assert_eq!(deposit_result.value, shares);
-
-        assert_eq!(*vault.total_deposits.borrow(), deposit_amount);
-        assert_eq!(*vault.total_supply.borrow(), shares);
-
+        let dx_btc = DxBtc::new();
+        let share_transfer = dx_btc.deposit()?;
+        
+        assert_eq!(share_transfer.value, MIN_DEPOSIT * SHARE_PRECISION_OFFSET);
+        assert_eq!(*dx_btc.total_supply.borrow(), MIN_DEPOSIT * SHARE_PRECISION_OFFSET);
+        assert_eq!(*dx_btc.total_deposits.borrow(), MIN_DEPOSIT);
         Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn test_withdraw_flow() -> Result<()> {
-        let (vault, mut context) = setup_token();
-        let deposit_amount = 1000;
+    async fn test_withdraw_flow() -> Result<()> {
+        // First make a deposit
+        let context = setup_deposit_context(MIN_DEPOSIT)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
 
-        // First deposit
-        setup_incoming_deposit(&mut context, deposit_amount);
-        let deposit_result = vault.deposit()?;
-        let shares = deposit_result.value;
-
-        // Preview withdrawal
-        let preview_amount = vault.preview_withdraw(shares)?;
-        assert_eq!(preview_amount, deposit_amount);
-
-        // Setup withdrawal
-        context.incoming_alkanes.0.clear();
-        context.incoming_alkanes.0.push(AlkaneTransfer {
-            id: context.myself.clone(),
-            value: shares,
+        let dx_btc = DxBtc::new();
+        let share_transfer = dx_btc.deposit()?;
+        
+        // Now withdraw all shares
+        let mut withdraw_context = setup_context()?;
+        withdraw_context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: withdraw_context.myself.clone(),
+            value: share_transfer.value,
         });
-        DxBtc::set_mock_context(context.clone());
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(withdraw_context));
 
-        // Actual withdrawal
-        let (shares_transfer, assets_transfer) = vault.withdraw()?;
-        assert_eq!(shares_transfer.value, shares);
-        assert_eq!(assets_transfer.value, deposit_amount);
-
-        assert_eq!(*vault.total_deposits.borrow(), 0);
-        assert_eq!(*vault.total_supply.borrow(), 0);
-
+        let (shares_transfer, assets_transfer) = dx_btc.withdraw()?;
+        
+        assert_eq!(shares_transfer.value, share_transfer.value);
+        assert_eq!(assets_transfer.value, MIN_DEPOSIT);
+        assert_eq!(*dx_btc.total_supply.borrow(), 0);
+        assert_eq!(*dx_btc.total_deposits.borrow(), 0);
         Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn test_preview_operations() -> Result<()> {
-        let (vault, mut context) = setup_token();
-        let deposit_amount = 1000;
+    async fn test_share_calculation_safety() -> Result<()> {
+        let context = setup_deposit_context(MIN_DEPOSIT)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
 
-        // Preview deposit
-        let shares = vault.preview_deposit(deposit_amount)?;
-        assert_eq!(shares, deposit_amount * SHARE_PRECISION_OFFSET);
-
-        // Actual deposit
-        setup_incoming_deposit(&mut context, deposit_amount);
-        let deposit_result = vault.deposit()?;
-        assert_eq!(deposit_result.value, shares);
-
-        // Preview withdrawal
-        let preview_amount = vault.preview_withdraw(shares)?;
-        assert_eq!(preview_amount, deposit_amount);
-
-        // Setup withdrawal
-        context.incoming_alkanes.0.clear();
-        context.incoming_alkanes.0.push(AlkaneTransfer {
-            id: context.myself.clone(),
-            value: shares,
-        });
-        DxBtc::set_mock_context(context.clone());
-
-        // Actual withdrawal
-        let (shares_transfer, assets_transfer) = vault.withdraw()?;
-        assert_eq!(shares_transfer.value, shares);
-        assert_eq!(assets_transfer.value, deposit_amount);
-
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn test_share_calculation_safety() -> Result<()> {
-        let (vault, mut context) = setup_token();
-        let first_deposit = 1000;
-        let second_deposit = 500;
-
-        // First deposit
-        setup_incoming_deposit(&mut context, first_deposit);
-        let first_shares = vault.deposit()?.value;
-        assert_eq!(first_shares, first_deposit * SHARE_PRECISION_OFFSET);
-
+        let dx_btc = DxBtc::new();
+        let initial_shares = dx_btc.deposit()?.value;
+        
         // Second deposit
-        setup_incoming_deposit(&mut context, second_deposit);
-        let second_shares = vault.deposit()?.value;
+        let context = setup_deposit_context(MIN_DEPOSIT * 2)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
         
-        // Calculate expected shares for second deposit
-        let total_deposits_with_virtual = first_deposit + VIRTUAL_ASSETS;
-        let total_supply_with_virtual = first_shares + VIRTUAL_SHARES;
-        let expected_second_shares = second_deposit
-            .checked_mul(total_supply_with_virtual)
-            .unwrap()
-            .checked_div(total_deposits_with_virtual)
-            .unwrap();
+        let second_shares = dx_btc.deposit()?.value;
         
-        assert_eq!(second_shares, expected_second_shares);
-
+        // Verify share ratio is maintained
+        assert_eq!(second_shares, initial_shares * 2);
         Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn test_withdrawal_safety() -> Result<()> {
-        let (vault, mut context) = setup_token();
-        let deposit_amount = 1000;
+    async fn test_withdrawal_safety() -> Result<()> {
+        // First make a deposit
+        let context = setup_deposit_context(MIN_DEPOSIT)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
 
-        // First deposit
-        setup_incoming_deposit(&mut context, deposit_amount);
-        let shares = vault.deposit()?.value;
-
-        // Setup withdrawal
-        context.incoming_alkanes.0.clear();
-        context.incoming_alkanes.0.push(AlkaneTransfer {
-            id: context.myself.clone(),
-            value: shares,
+        let dx_btc = DxBtc::new();
+        let share_transfer = dx_btc.deposit()?;
+        
+        // Now withdraw half the shares
+        let mut withdraw_context = setup_context()?;
+        withdraw_context.incoming_alkanes.0.push(AlkaneTransfer {
+            id: withdraw_context.myself.clone(),
+            value: share_transfer.value / 2,
         });
-        DxBtc::set_mock_context(context.clone());
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(withdraw_context));
 
-        // Withdrawal
-        let (shares_transfer, assets_transfer) = vault.withdraw()?;
-        assert_eq!(shares_transfer.value, shares);
-        assert_eq!(assets_transfer.value, deposit_amount);
+        let (shares_transfer, assets_transfer) = dx_btc.withdraw()?;
+        
+        assert_eq!(shares_transfer.value, share_transfer.value / 2);
+        assert_eq!(assets_transfer.value, MIN_DEPOSIT / 2);
+        Ok(())
+    }
 
+    #[wasm_bindgen_test]
+    async fn test_preview_operations() -> Result<()> {
+        let dx_btc = DxBtc::new();
+        
+        // Test preview deposit
+        let deposit_amount = MIN_DEPOSIT;
+        let expected_shares = dx_btc.preview_deposit(deposit_amount)?;
+        
+        // Make actual deposit
+        let context = setup_deposit_context(deposit_amount)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
+        
+        let actual_shares = dx_btc.deposit()?.value;
+        assert_eq!(actual_shares, expected_shares);
+        
+        // Test preview withdraw
+        let expected_assets = dx_btc.preview_withdraw(actual_shares)?;
+        assert_eq!(expected_assets, deposit_amount);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_inflation_attack_resistance() -> Result<()> {
+        let dx_btc = DxBtc::new();
+        
+        // Try a deposit below minimum - should fail
+        let tiny_deposit = MIN_DEPOSIT / 2;
+        let context = setup_deposit_context(tiny_deposit)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
+        
+        let result = dx_btc.deposit();
+        assert!(result.is_err());
+        
+        // Initial deposit at minimum
+        let context = setup_deposit_context(MIN_DEPOSIT)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
+        
+        let initial_shares = dx_btc.deposit()?.value;
+        
+        // Large follow-up deposit
+        let context = setup_deposit_context(MIN_DEPOSIT * 1000)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
+        
+        let large_shares = dx_btc.deposit()?.value;
+        
+        // Verify share ratio is maintained
+        let expected_shares = initial_shares * 1000;
+        let share_deviation = ((large_shares as f64 - expected_shares as f64) / expected_shares as f64 * 100.0).abs();
+        assert!(share_deviation < 1.0, "Share price deviation too large: {:.0}%", share_deviation);
+        
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_virtual_share_impact() -> Result<()> {
+        let dx_btc = DxBtc::new();
+        
+        // Make initial deposit equal to virtual assets
+        let context = setup_deposit_context(VIRTUAL_ASSETS)?;
+        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context));
+        
+        let shares = dx_btc.deposit()?.value;
+        
+        // Due to virtual shares/assets, should get approximately half the shares
+        let expected_shares = VIRTUAL_ASSETS * SHARE_PRECISION_OFFSET / 2;
+        let share_deviation = ((shares as f64 - expected_shares as f64) / expected_shares as f64 * 100.0).abs();
+        assert!(share_deviation < 1.0, "Share price deviation too large: {:.0}%", share_deviation);
+        
         Ok(())
     }
 } 
