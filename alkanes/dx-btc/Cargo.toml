@@ -11,6 +11,7 @@ test = []
 
 [dependencies]
 alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
 metashrew-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 token-support = { path = "../../crates/token-support" }
@@ -21,3 +22,4 @@ wasm-bindgen-test = "0.3.49"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.49"
+alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }

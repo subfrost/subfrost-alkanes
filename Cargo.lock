@@ -46,7 +46,7 @@ dependencies = [
 [[package]]
 name = "alkanes"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#b4f5f21a64a2a9a6555454639411a528f63fbb26"
+source = "git+https://github.com/kungfuflex/alkanes-rs#6cc0d62c0feffe188332c3f6a14c4daf817e7c04"
 dependencies = [
  "alkanes-support",
  "anyhow",
@@ -79,7 +79,7 @@ dependencies = [
 [[package]]
 name = "alkanes-runtime"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#b4f5f21a64a2a9a6555454639411a528f63fbb26"
+source = "git+https://github.com/kungfuflex/alkanes-rs#6cc0d62c0feffe188332c3f6a14c4daf817e7c04"
 dependencies = [
  "alkanes-support",
  "anyhow",
@@ -92,7 +92,7 @@ dependencies = [
 [[package]]
 name = "alkanes-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#b4f5f21a64a2a9a6555454639411a528f63fbb26"
+source = "git+https://github.com/kungfuflex/alkanes-rs#6cc0d62c0feffe188332c3f6a14c4daf817e7c04"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.5",
@@ -276,7 +276,7 @@ checksum = "3c87f3f15e7794432337fc718554eaa4dc8f04c9677a950ffe366f20a162ae42"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -478,9 +478,9 @@ checksum = "325918d6fe32f23b19878fe4b34794ae41fc19ddbe53b10571a4874d44ffd39b"
 
 [[package]]
 name = "cc"
-version = "1.2.6"
+version = "1.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d6dbb628b8f8555f86d0323c2eb39e3ec81901f4b83e091db8a6a76d316a333"
+checksum = "a012a0df96dd6d06ba9a1b29d6402d1a5d77c6befd2566afdc26e10603dc93d7"
 dependencies = [
  "shlex",
 ]
@@ -571,7 +571,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -582,7 +582,7 @@ checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -616,7 +616,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustc_version 0.4.1",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -636,7 +636,7 @@ checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
  "unicode-xid",
 ]
 
@@ -669,6 +669,7 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 name = "dx-btc"
 version = "0.1.0"
 dependencies = [
+ "alkanes-runtime",
  "alkanes-support",
  "anyhow",
  "bitcoin 0.32.5",
@@ -901,7 +902,7 @@ checksum = "a0eb5a3343abf848c0984fe4604b2b105da9539376e24fc0a3b0007411ae4fd9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -1013,7 +1014,7 @@ dependencies = [
 [[package]]
 name = "metashrew"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#b4f5f21a64a2a9a6555454639411a528f63fbb26"
+source = "git+https://github.com/kungfuflex/alkanes-rs#6cc0d62c0feffe188332c3f6a14c4daf817e7c04"
 dependencies = [
  "anyhow",
  "bitcoin 0.31.2",
@@ -1033,7 +1034,7 @@ dependencies = [
 [[package]]
 name = "metashrew-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#b4f5f21a64a2a9a6555454639411a528f63fbb26"
+source = "git+https://github.com/kungfuflex/alkanes-rs#6cc0d62c0feffe188332c3f6a14c4daf817e7c04"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1168,7 +1169,7 @@ dependencies = [
 [[package]]
 name = "ordinals"
 version = "0.0.10"
-source = "git+https://github.com/kungfuflex/alkanes-rs#b4f5f21a64a2a9a6555454639411a528f63fbb26"
+source = "git+https://github.com/kungfuflex/alkanes-rs#6cc0d62c0feffe188332c3f6a14c4daf817e7c04"
 dependencies = [
  "bitcoin 0.32.5",
  "derive_more 1.0.0",
@@ -1428,7 +1429,7 @@ dependencies = [
 [[package]]
 name = "protorune"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#b4f5f21a64a2a9a6555454639411a528f63fbb26"
+source = "git+https://github.com/kungfuflex/alkanes-rs#6cc0d62c0feffe188332c3f6a14c4daf817e7c04"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.5",
@@ -1450,7 +1451,7 @@ dependencies = [
 [[package]]
 name = "protorune-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#b4f5f21a64a2a9a6555454639411a528f63fbb26"
+source = "git+https://github.com/kungfuflex/alkanes-rs#6cc0d62c0feffe188332c3f6a14c4daf817e7c04"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1757,7 +1758,7 @@ checksum = "5a9bf7cf98d04a2b28aead066b7496853d4779c9cc183c440dbac457641e19a0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -1799,7 +1800,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -1890,9 +1891,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.94"
+version = "2.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "987bc0be1cdea8b10216bd06e2ca407d40b9543468fafd3ddfb02f36e77f71f3"
+checksum = "46f71c0377baf4ef1cc3e3402ded576dccc315800fbc62dfc7fe04b009773b4a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1945,7 +1946,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -1956,7 +1957,7 @@ checksum = "7b50fa271071aae2e6ee85f842e2e28ba8cd2c5fb67f11fcb1fd70b276f9e7d4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -2124,7 +2125,7 @@ dependencies = [
  "log",
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
  "wasm-bindgen-shared",
 ]
 
@@ -2159,7 +2160,7 @@ checksum = "30d7a95b763d3c45903ed6c81f156801839e5ee968bb07e534c44df0fcd330c2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -2192,7 +2193,7 @@ checksum = "54171416ce73aa0b9c377b51cc3cb542becee1cd678204812e8392e5b0e4a031"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -2367,9 +2368,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.6.21"
+version = "0.6.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6f5bb5257f2407a5425c6e749bfd9692192a73e70a6060516ac04f889087d68"
+checksum = "39281189af81c07ec09db316b302a3e67bf9bd7cbf6c820b50e35fee9c2fa980"
 dependencies = [
  "memchr",
 ]
@@ -2401,7 +2402,7 @@ checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]
 
 [[package]]
@@ -2421,5 +2422,5 @@ checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.94",
+ "syn 2.0.95",
 ]

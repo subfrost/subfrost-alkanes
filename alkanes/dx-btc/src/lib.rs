@@ -1,13 +1,24 @@
 use alkanes_support::context::Context;
 use alkanes_support::id::AlkaneId;
 use alkanes_support::parcel::AlkaneTransfer;
+use alkanes_support::utils::{shift_or_err, shift_id_or_err};
+use alkanes_support::cellpack::{Cellpack};
+use alkanes_support::response::CallResponse;
+use metashrew_support::compat::{to_arraybuffer_layout, to_passback_ptr};
+use metashrew_support::index_pointer::KeyValuePointer;
+use alkanes_runtime::{storage::{StoragePointer}, runtime::AlkaneResponder, declare_alkane};
 use anyhow::{Result, anyhow};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::thread_local;
+use std::borrow::Borrow;
+use std::sync::{Arc};
+
+#[cfg(test)]
+use alkanes_runtime::imports::set_mock_context;
 
 thread_local! {
-    pub static MOCK_CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
+    pub static MOCK_CONTEXT: RefCell<Option<Context>> = RefCell::new(Some(Context::default()));
 }
 
 pub const VIRTUAL_SHARES: u128 = 1_000_000;
@@ -15,6 +26,7 @@ pub const VIRTUAL_ASSETS: u128 = 1_000_000;
 pub const SHARE_PRECISION_OFFSET: u128 = 1_000_000_000;
 pub const MIN_DEPOSIT: u128 = 1_000_000;
 
+#[derive(Default)]
 pub struct DxBtc {
     pub deposit_token: AlkaneId,
     pub total_supply: RefCell<u128>,    // Raw shares
@@ -23,9 +35,22 @@ pub struct DxBtc {
 }
 
 impl DxBtc {
+    pub fn deposit_token_pointer() -> StoragePointer {
+      StoragePointer::from_keyword("/deposit-token")
+    }
+    pub fn set_deposit_token(id: AlkaneId) {
+      Self::deposit_token_pointer().set(Arc::new(id.into()));
+    }
+    pub fn get_deposit_token() -> AlkaneId {
+      Self::deposit_token_pointer().get().as_ref().to_vec().try_into().unwrap_or_else(|_| AlkaneId::default())
+    }
+    pub fn __initialize(id: AlkaneId) -> Result<()> {
+      Self::set_deposit_token(id);
+      Ok(())
+    }
     pub fn new() -> Self {
         Self {
-            deposit_token: AlkaneId::new(1, 2),
+            deposit_token: Self::get_deposit_token(),
             total_supply: RefCell::new(0),
             total_deposits: RefCell::new(0),
             balances: RefCell::new(HashMap::new()),
@@ -279,4 +304,29 @@ impl DxBtc {
         *self.total_deposits.borrow_mut() = new_deposits;
         Ok(())
     }
+/*
+    #[cfg(test)]
+    fn context(&self) -> Context {
+      MOCK_CONTEXT.with(|ctx| ctx.borrow().clone().unwrap_or_else(|| Context::default()))
+    }
+*/
 }
+
+impl AlkaneResponder for DxBtc {
+  fn execute(&self) -> Result<CallResponse> {
+    #[cfg(test)]
+    set_mock_context(Context::default());
+    let mut context = self.context()?;
+    match shift_or_err(&mut context.inputs)? {
+      0 => {
+        Self::__initialize(shift_id_or_err(&mut context.inputs)?);
+        Ok(CallResponse::forward(&context.incoming_alkanes))
+      }
+      _ => {
+        Err(anyhow!("opcode not supported"))
+      }
+    }
+  }
+}
+
+declare_alkane!{DxBtc}

@@ -1,2 +1,2 @@
 pub mod helpers;
-pub mod dxbtc_tests;
+pub mod integration;
