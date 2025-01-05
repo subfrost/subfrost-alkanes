@@ -2,7 +2,6 @@ use alkanes_support::context::Context;
 use alkanes_support::id::AlkaneId;
 use alkanes_support::parcel::AlkaneTransfer;
 use alkanes_support::utils::{shift_or_err, shift_id_or_err};
-use alkanes_support::cellpack::{Cellpack};
 use alkanes_support::response::CallResponse;
 use metashrew_support::compat::{to_arraybuffer_layout, to_passback_ptr};
 use metashrew_support::index_pointer::KeyValuePointer;
@@ -11,7 +10,6 @@ use anyhow::{Result, anyhow};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::thread_local;
-use std::borrow::Borrow;
 use std::sync::{Arc};
 
 #[cfg(test)]
@@ -319,7 +317,7 @@ impl AlkaneResponder for DxBtc {
     let mut context = self.context()?;
     match shift_or_err(&mut context.inputs)? {
       0 => {
-        Self::__initialize(shift_id_or_err(&mut context.inputs)?);
+        Self::__initialize(shift_id_or_err(&mut context.inputs)?)?;
         Ok(CallResponse::forward(&context.incoming_alkanes))
       }
       _ => {
