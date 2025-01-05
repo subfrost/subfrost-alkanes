@@ -1,7 +1,6 @@
 use alkanes_support::context::Context;
 use alkanes_support::id::AlkaneId;
 use alkanes_support::parcel::AlkaneTransfer;
-use alkanes_support::storage::StorageMap;
 use anyhow::{Result, bail};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -18,8 +17,8 @@ pub const MIN_DEPOSIT: u128 = 1_000_000;
 
 pub struct DxBtc {
     pub deposit_token: AlkaneId,
-    pub total_supply: RefCell<u128>,
-    pub total_deposits: RefCell<u128>,
+    pub total_supply: RefCell<u128>,    // Raw shares
+    pub total_deposits: RefCell<u128>,   // Raw assets
     pub balances: RefCell<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
@@ -42,12 +41,14 @@ impl DxBtc {
         }
 
         let shares = self.calculate_shares(deposit.value)?;
-        *self.total_supply.borrow_mut() += shares;
+        
+        // Store raw values
+        *self.total_supply.borrow_mut() += shares / SHARE_PRECISION_OFFSET;
         *self.total_deposits.borrow_mut() += deposit.value;
         
         Ok(AlkaneTransfer {
             id: context.myself,
-            value: shares,
+            value: shares,  // Return precision-scaled shares
         })
     }
 
@@ -57,7 +58,8 @@ impl DxBtc {
         
         let assets = self.calculate_withdrawal_amount(shares.value)?;
         
-        *self.total_supply.borrow_mut() -= shares.value;
+        // Update raw storage values
+        *self.total_supply.borrow_mut() -= shares.value / SHARE_PRECISION_OFFSET;
         *self.total_deposits.borrow_mut() -= assets;
         
         Ok((
@@ -84,27 +86,50 @@ impl DxBtc {
     }
 
     pub fn calculate_shares(&self, amount: u128) -> Result<u128> {
-        let total_supply = *self.total_supply.borrow();
-        let total_deposits = *self.total_deposits.borrow();
-        
-        let total_supply_with_virtual = total_supply + VIRTUAL_SHARES * SHARE_PRECISION_OFFSET;
-        let total_deposits_with_virtual = total_deposits + VIRTUAL_ASSETS;
+        let total_supply = *self.total_supply.borrow();  // Raw shares
+        let total_deposits = *self.total_deposits.borrow();  // Raw assets
         
         if total_supply == 0 {
-            // First deposit gets shares based on virtual ratio
-            Ok(amount * SHARE_PRECISION_OFFSET / 2)
+            // Initial deposit with virtual offset protection
+            Ok(amount
+                .checked_mul(VIRTUAL_SHARES)
+                .and_then(|x| x.checked_div(VIRTUAL_ASSETS))
+                .and_then(|x| x.checked_mul(SHARE_PRECISION_OFFSET))
+                .ok_or_else(|| anyhow::anyhow!("Initial share calculation overflow"))?)
         } else {
-            Ok(amount * total_supply_with_virtual / total_deposits_with_virtual)
+            let total_supply_with_virtual = total_supply
+                .checked_add(VIRTUAL_SHARES)
+                .ok_or_else(|| anyhow::anyhow!("Total supply overflow"))?;
+
+            let total_deposits_with_virtual = total_deposits
+                .checked_add(VIRTUAL_ASSETS)
+                .ok_or_else(|| anyhow::anyhow!("Total deposits overflow"))?;
+
+            // Calculate shares maintaining precision
+            amount
+                .checked_mul(total_supply_with_virtual)
+                .and_then(|x| x.checked_mul(SHARE_PRECISION_OFFSET))
+                .and_then(|x| x.checked_div(total_deposits_with_virtual))
+                .ok_or_else(|| anyhow::anyhow!("Share calculation overflow"))
         }
     }
 
     pub fn calculate_withdrawal_amount(&self, shares: u128) -> Result<u128> {
-        let total_supply = *self.total_supply.borrow();
-        let total_deposits = *self.total_deposits.borrow();
-        
-        let total_supply_with_virtual = total_supply + VIRTUAL_SHARES * SHARE_PRECISION_OFFSET;
-        let total_deposits_with_virtual = total_deposits + VIRTUAL_ASSETS;
-        
-        Ok(shares * total_deposits_with_virtual / total_supply_with_virtual)
+        let total_supply = *self.total_supply.borrow();  // Raw shares
+        let total_deposits = *self.total_deposits.borrow();  // Raw assets
+
+        let total_supply_with_virtual = total_supply
+            .checked_add(VIRTUAL_SHARES)
+            .ok_or_else(|| anyhow::anyhow!("Total supply overflow"))?;
+
+        let total_deposits_with_virtual = total_deposits
+            .checked_add(VIRTUAL_ASSETS)
+            .ok_or_else(|| anyhow::anyhow!("Total deposits overflow"))?;
+
+        shares
+            .checked_mul(total_deposits_with_virtual)
+            .and_then(|x| x.checked_div(total_supply_with_virtual))
+            .and_then(|x| x.checked_div(SHARE_PRECISION_OFFSET))
+            .ok_or_else(|| anyhow::anyhow!("Withdrawal calculation overflow"))
     }
 }
