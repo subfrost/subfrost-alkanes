@@ -311,20 +311,57 @@ impl DxBtc {
 }
 
 impl AlkaneResponder for DxBtc {
-  fn execute(&self) -> Result<CallResponse> {
-    #[cfg(test)]
-    set_mock_context(Context::default());
-    let mut context = self.context()?;
-    match shift_or_err(&mut context.inputs)? {
-      0 => {
-        Self::__initialize(shift_id_or_err(&mut context.inputs)?)?;
-        Ok(CallResponse::forward(&context.incoming_alkanes))
-      }
-      _ => {
-        Err(anyhow!("opcode not supported"))
-      }
+    fn execute(&self) -> Result<CallResponse> {
+        #[cfg(test)]
+        set_mock_context(Context::default());
+        let context = self.context()?;
+        let mut inputs = context.inputs.clone();
+        let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
+
+        match shift_or_err(&mut inputs)? {
+            0 => {
+                let mut pointer = StoragePointer::from_keyword("/initialized");
+                if pointer.get().len() == 0 {
+                    let deposit_token = shift_id_or_err(&mut inputs)?;
+                    Self::__initialize(deposit_token)?;
+                    pointer.set(Arc::new(vec![0x01]));
+                    Ok(response)
+                } else {
+                    return Err(anyhow!("already initialized"));
+                }
+            }
+            1 => {
+                // Deposit
+                let transfer = self.deposit(&context)?;
+                response.alkanes.0.push(transfer);
+                Ok(response)
+            }
+            2 => {
+                // Withdraw
+                let (share_transfer, asset_transfer) = self.withdraw(&context)?;
+                response.alkanes.0.push(share_transfer);
+                response.alkanes.0.push(asset_transfer);
+                Ok(response)
+            }
+            3 => {
+                // Preview deposit
+                let amount = shift_or_err(&mut inputs)?;
+                let shares = self.preview_deposit(amount)?;
+                response.data = shares.to_le_bytes().to_vec();
+                Ok(response)
+            }
+            4 => {
+                // Preview withdraw
+                let shares = shift_or_err(&mut inputs)?;
+                let assets = self.preview_withdraw(shares)?;
+                response.data = assets.to_le_bytes().to_vec();
+                Ok(response)
+            }
+            _ => {
+                Err(anyhow!("opcode not supported"))
+            }
+        }
     }
-  }
 }
 
 declare_alkane!{DxBtc}
