@@ -357,6 +357,35 @@ impl AlkaneResponder for DxBtc {
                 response.data = assets.to_le_bytes().to_vec();
                 Ok(response)
             }
+            5 => {
+                // Get total supply
+                response.data = self.total_supply.borrow().to_le_bytes().to_vec();
+                Ok(response)
+            }
+            6 => {
+                // Get total deposits (assets)
+                response.data = self.total_deposits.borrow().to_le_bytes().to_vec();
+                Ok(response)
+            }
+            7 => {
+                // Get balance
+                let owner = shift_id_or_err(&mut inputs)?;
+                let balance = self.get_balance(&owner)?;
+                response.data = balance.to_le_bytes().to_vec();
+                Ok(response)
+            }
+            8 => {
+                // Get shares
+                let owner = shift_id_or_err(&mut inputs)?;
+                let shares = self.get_shares(&owner)?;
+                response.data = shares.to_le_bytes().to_vec();
+                Ok(response)
+            }
+            9 => {
+                // Get deposit token
+                response.data = self.deposit_token.to_vec();
+                Ok(response)
+            }
             _ => {
                 Err(anyhow!("opcode not supported"))
             }
