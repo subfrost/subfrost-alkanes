@@ -1,8 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use dx_btc::{DxBtc, SHARE_PRECISION_OFFSET, VIRTUAL_ASSETS, VIRTUAL_SHARES, MIN_DEPOSIT, MOCK_CONTEXT};
+    use dx_btc::{DxBtc, SHARE_PRECISION_OFFSET, VIRTUAL_ASSETS, VIRTUAL_SHARES, MIN_DEPOSIT};
     use alkanes_support::context::Context;
-    use alkanes_support::parcel::AlkaneTransfer;
+    use alkanes_support::parcel::{AlkaneTransfer, AlkaneTransferParcel};
+    use alkanes_runtime::runtime::AlkaneResponder;
+    use alkanes_support::id::AlkaneId;
+    use alkanes_runtime::imports::set_mock_context;
     use std::io::Cursor;
     use anyhow::Result;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -15,7 +18,26 @@ mod tests {
 
     fn reset_dx_btc() {
         TEST_DX_BTC.with(|dx_btc| {
-            *dx_btc.borrow_mut() = Some(Rc::new(DxBtc::new()));
+            let instance = DxBtc::new();
+            
+            // Initialize with deposit token
+            let deposit_token = AlkaneId { block: 0, tx: 0 };
+            let mut context = Context {
+                myself: deposit_token.clone(),
+                caller: deposit_token.clone(),
+                vout: 0,
+                incoming_alkanes: AlkaneTransferParcel::default(),
+                inputs: vec![0], // Just opcode 0 for initialization
+            };
+            set_mock_context(context.clone());
+            instance.execute().unwrap();
+            
+            // Set min deposit through execute
+            context.inputs = vec![104, MIN_DEPOSIT]; // opcode 104 for set_min_deposit
+            set_mock_context(context.clone());
+            instance.execute().unwrap();
+            
+            *dx_btc.borrow_mut() = Some(Rc::new(instance));
         });
     }
 
@@ -29,15 +51,19 @@ mod tests {
     }
 
     fn setup_context() -> Result<Context> {
-        let buffer = vec![0u8; 1024];
-        let mut cursor = Cursor::new(buffer);
-        Context::parse(&mut cursor)
+        Ok(Context {
+            myself: AlkaneId { block: 0, tx: 0 },
+            caller: AlkaneId { block: 0, tx: 0 },
+            vout: 0,
+            incoming_alkanes: AlkaneTransferParcel::default(),
+            inputs: vec![0, 0, 0],
+        })
     }
 
     fn setup_deposit_context(amount: u128, has_balance: bool) -> Result<Context> {
         let mut context = setup_context()?;
         let dx_btc = get_dx_btc();
-        let deposit_token = dx_btc.deposit_token.clone();
+        let deposit_token = AlkaneId { block: 0, tx: 0 };
         
         // Only add transfer if user has balance
         if has_balance {
@@ -48,7 +74,7 @@ mod tests {
             context.incoming_alkanes.0.push(deposit_transfer.clone());
             
             // Set up initial balance
-            dx_btc.set_balance(&deposit_transfer.id, &dx_btc.deposit_token, amount)?;
+            dx_btc.set_balance(&deposit_transfer.id, &deposit_token, amount);
         }
         Ok(context)
     }
@@ -57,7 +83,7 @@ mod tests {
     async fn test_deposit_without_balance() -> Result<()> {
         reset_dx_btc();
         let context = setup_deposit_context(VIRTUAL_ASSETS, false)?;
-        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context.clone()));
+        set_mock_context(context.clone());
 
         let dx_btc = get_dx_btc();
         
@@ -82,10 +108,10 @@ mod tests {
         };
         context.incoming_alkanes.0.push(share_transfer);
         
-        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context.clone()));
+        set_mock_context(context.clone());
         
         // Verify we have no shares
-        let initial_shares = dx_btc.get_shares(&context.myself)?;
+        let initial_shares = dx_btc.get_shares(&context.myself);
         assert_eq!(initial_shares, 0, "Should have no shares initially");
         
         // Attempt withdraw without shares should fail
@@ -103,13 +129,14 @@ mod tests {
         reset_dx_btc();
         // Test with minimum deposit to verify precision
         let context = setup_deposit_context(MIN_DEPOSIT, true)?;
-        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context.clone()));
+        set_mock_context(context.clone());
 
         let dx_btc = get_dx_btc();
+        let deposit_token = DxBtc::get_deposit_token();
         
         // Verify initial balance
         let deposit_transfer = context.incoming_alkanes.0.first().unwrap();
-        let initial_balance = dx_btc.get_balance(&deposit_transfer.id)?;
+        let initial_balance = dx_btc.get_balance(&deposit_transfer.id, &deposit_token);
         assert_eq!(initial_balance, MIN_DEPOSIT, "Initial balance not set correctly");
         
         let share_transfer = dx_btc.deposit(&context)?;
@@ -131,13 +158,14 @@ mod tests {
         // First make a deposit
         let deposit_amount = VIRTUAL_ASSETS;
         let context = setup_deposit_context(deposit_amount, true)?;
-        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context.clone()));
+        set_mock_context(context.clone());
 
         let dx_btc = get_dx_btc();
+        let deposit_token = DxBtc::get_deposit_token();
         
         // Verify initial balance
         let deposit_transfer = context.incoming_alkanes.0.first().unwrap();
-        let initial_balance = dx_btc.get_balance(&deposit_transfer.id)?;
+        let initial_balance = dx_btc.get_balance(&deposit_transfer.id, &deposit_token);
         assert_eq!(initial_balance, deposit_amount, "Initial balance not set correctly");
         
         let share_transfer = dx_btc.deposit(&context)?;
@@ -151,7 +179,7 @@ mod tests {
             value: half_shares,
         });
         
-        MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(withdraw_context.clone()));
+        set_mock_context(withdraw_context.clone());
         
         let (shares_out, assets_out) = dx_btc.withdraw(&withdraw_context)?;
         
@@ -173,6 +201,7 @@ mod tests {
     async fn test_virtual_offset_exchange_rate() -> Result<()> {
         reset_dx_btc();
         let dx_btc = get_dx_btc();
+        let deposit_token = DxBtc::get_deposit_token();
         
         // Make two deposits of different sizes
         let deposits = vec![MIN_DEPOSIT, MIN_DEPOSIT * 2];
@@ -180,11 +209,11 @@ mod tests {
         
         for amount in deposits {
             let context = setup_deposit_context(amount, true)?;
-            MOCK_CONTEXT.with(|ctx| *ctx.borrow_mut() = Some(context.clone()));
+            set_mock_context(context.clone());
             
             // Verify initial balance
             let deposit_transfer = context.incoming_alkanes.0.first().unwrap();
-            let initial_balance = dx_btc.get_balance(&deposit_transfer.id)?;
+            let initial_balance = dx_btc.get_balance(&deposit_transfer.id, &deposit_token);
             assert_eq!(initial_balance, amount, "Initial balance not set correctly");
             
             let shares = dx_btc.deposit(&context)?.value;
