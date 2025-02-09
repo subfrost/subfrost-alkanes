@@ -211,7 +211,6 @@ impl AlkaneResponder for SyntheticBitcoin {
                 let mut pointer = StoragePointer::from_keyword("/initialized");
                 if pointer.get().len() == 0 {
                     let auth_token_units = shift_or_err(&mut inputs)?;
-                    let response = CallResponse::default();
                     response
                         .alkanes
                         .0
