@@ -32,7 +32,7 @@ dependencies = [
 [[package]]
 name = "alkanes"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#e1307d77e506924727c5c254ec295a3c2e90414c"
+source = "git+https://github.com/kungfuflex/alkanes-rs#8ecfae369e993f6016cc99e6964a9078aa0ee68d"
 dependencies = [
  "alkanes-support",
  "anyhow",
@@ -65,7 +65,7 @@ dependencies = [
 [[package]]
 name = "alkanes-runtime"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#e1307d77e506924727c5c254ec295a3c2e90414c"
+source = "git+https://github.com/kungfuflex/alkanes-rs#8ecfae369e993f6016cc99e6964a9078aa0ee68d"
 dependencies = [
  "alkanes-support",
  "anyhow",
@@ -78,7 +78,7 @@ dependencies = [
 [[package]]
 name = "alkanes-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#e1307d77e506924727c5c254ec295a3c2e90414c"
+source = "git+https://github.com/kungfuflex/alkanes-rs#8ecfae369e993f6016cc99e6964a9078aa0ee68d"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.5",
@@ -1046,7 +1046,7 @@ dependencies = [
 [[package]]
 name = "metashrew"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#e1307d77e506924727c5c254ec295a3c2e90414c"
+source = "git+https://github.com/kungfuflex/alkanes-rs#8ecfae369e993f6016cc99e6964a9078aa0ee68d"
 dependencies = [
  "anyhow",
  "bitcoin 0.31.2",
@@ -1066,7 +1066,7 @@ dependencies = [
 [[package]]
 name = "metashrew-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#e1307d77e506924727c5c254ec295a3c2e90414c"
+source = "git+https://github.com/kungfuflex/alkanes-rs#8ecfae369e993f6016cc99e6964a9078aa0ee68d"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1201,7 +1201,7 @@ dependencies = [
 [[package]]
 name = "ordinals"
 version = "0.0.10"
-source = "git+https://github.com/kungfuflex/alkanes-rs#e1307d77e506924727c5c254ec295a3c2e90414c"
+source = "git+https://github.com/kungfuflex/alkanes-rs#8ecfae369e993f6016cc99e6964a9078aa0ee68d"
 dependencies = [
  "bitcoin 0.32.5",
  "derive_more 1.0.0",
@@ -1463,7 +1463,7 @@ dependencies = [
 [[package]]
 name = "protorune"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#e1307d77e506924727c5c254ec295a3c2e90414c"
+source = "git+https://github.com/kungfuflex/alkanes-rs#8ecfae369e993f6016cc99e6964a9078aa0ee68d"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.5",
@@ -1485,7 +1485,7 @@ dependencies = [
 [[package]]
 name = "protorune-support"
 version = "0.1.0"
-source = "git+https://github.com/kungfuflex/alkanes-rs#e1307d77e506924727c5c254ec295a3c2e90414c"
+source = "git+https://github.com/kungfuflex/alkanes-rs#8ecfae369e993f6016cc99e6964a9078aa0ee68d"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",

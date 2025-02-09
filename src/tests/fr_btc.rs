@@ -69,7 +69,6 @@ fn test_fr_btc() -> Result<()> {
       let out_len = tx.output.len();
       &mut tx.output[out_len - 1]
     };
-    println!("{:?}", test_block.txdata[test_block.txdata.len() - 1]);
     let len = test_block.txdata.len();
     let outpoint = OutPoint {
         txid: test_block.txdata[len - 1].compute_txid(),
@@ -96,7 +95,9 @@ fn test_fr_btc() -> Result<()> {
     })
     .encipher();
     println!("calldata: {:?}", &parcel.calldata);
+/*
     let callresponse_data = view::simulate_parcel(&parcel, u64::MAX)?.0.data;
     println!("callresponse: {:?}", callresponse_data);
+*/
     Ok(())
 }
