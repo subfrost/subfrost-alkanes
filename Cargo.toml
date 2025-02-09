@@ -24,6 +24,9 @@ alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 metashrew-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 types-support = { path = "crates/types-support" }
+alkanes = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
+metashrew = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
+protorune = { git = "https://github.com/kungfuflex/alkanes-rs", features = ["test-utils"] }
 ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
 anyhow = "1.0.94"
 bitcoin = { version = "0.32.4", features = ["rand"] }
