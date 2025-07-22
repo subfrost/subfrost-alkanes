@@ -444,15 +444,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "block-buffer"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
-dependencies = [
- "generic-array",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -562,15 +553,6 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
-
-[[package]]
-name = "cpufeatures"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "crc32fast"
@@ -702,7 +684,6 @@ version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
- "block-buffer",
  "crypto-common",
 ]
 
@@ -711,21 +692,6 @@ name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
-
-[[package]]
-name = "dx-btc"
-version = "0.1.0"
-dependencies = [
- "alkanes-runtime",
- "alkanes-support",
- "anyhow",
- "bitcoin 0.32.6",
- "metashrew-support",
- "ordinals 0.5.2",
- "protorune-support",
- "token-support",
- "wasm-bindgen-test",
-]
 
 [[package]]
 name = "dyn-clone"
@@ -823,20 +789,6 @@ dependencies = [
  "ordinals 0.5.2",
  "protorune-support",
  "types-support",
-]
-
-[[package]]
-name = "frost"
-version = "0.1.0"
-dependencies = [
- "alkanes-runtime",
- "alkanes-support",
- "anyhow",
- "bitcoin 0.32.6",
- "metashrew-support",
- "ordinals 0.5.2",
- "protorune-support",
- "token-support",
 ]
 
 [[package]]
@@ -1089,23 +1041,6 @@ name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
-
-[[package]]
-name = "merkle-distributor"
-version = "0.1.0"
-dependencies = [
- "alkanes-runtime",
- "alkanes-support",
- "anyhow",
- "bitcoin 0.32.6",
- "metashrew-support",
- "num",
- "ordinals 0.5.2",
- "protorune-support",
- "rs_merkle",
- "ruint",
- "token-support",
-]
 
 [[package]]
 name = "metashrew-core"
@@ -1725,15 +1660,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rs_merkle"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb09b49230ba22e8c676e7b75dfe2887dea8121f18b530ae0ba519ce442d2b21"
-dependencies = [
- "sha2",
-]
-
-[[package]]
 name = "ruint"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2009,17 +1935,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha2"
-version = "0.10.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "digest 0.10.7",
-]
-
-[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2193,19 +2108,6 @@ checksum = "3526739392ec93fd8b359c8e98514cb3e8e021beb4e5f597b00a0221f8ed8a49"
 dependencies = [
  "num-conv",
  "time-core",
-]
-
-[[package]]
-name = "token-support"
-version = "0.1.0"
-dependencies = [
- "alkanes-runtime",
- "alkanes-support",
- "anyhow",
- "bitcoin 0.32.6",
- "metashrew-support",
- "ordinals 0.5.2",
- "protorune-support",
 ]
 
 [[package]]

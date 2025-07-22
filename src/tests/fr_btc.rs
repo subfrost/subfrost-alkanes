@@ -31,7 +31,7 @@ use alkanes::network::set_view_mode;
 use alkanes::tests::helpers as alkane_helpers;
 use alkanes_support::cellpack::Cellpack;
 #[allow(unused_imports)]
-use metashrew::{get_cache, index_pointer::IndexPointer, println, stdio::stdout};
+use metashrew_core::{get_cache, index_pointer::IndexPointer, println, stdio::stdout};
 use ordinals::{Artifact, Runestone};
 use std::fmt::Write;
 use wasm_bindgen_test::wasm_bindgen_test;

@@ -17,7 +17,7 @@ debug-log = ["alkanes/debug-log"]
 crate-type = ["cdylib", "rlib"]
 
 [workspace]
-members = ["alkanes/*", '.']
+members = ["alkanes/*", 'crates/*']
 
 [workspace.dependencies]
 alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs"}
