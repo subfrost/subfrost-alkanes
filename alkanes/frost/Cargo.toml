@@ -12,7 +12,7 @@ test = []
 [dependencies]
 alkanes-support = { git = "https:/github.com/kungfuflex/alkanes-rs" }
 alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
-metashrew-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+metashrew-support = { workspace = true }
 protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 token-support = { path = "../../crates/token-support" }
 ordinals = { git = "https://github.com/kungfuflex/alkanes-rs" }
