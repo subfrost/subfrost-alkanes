@@ -16,19 +16,19 @@ use alkanes_runtime::{
 use alkanes_support::id::AlkaneId;
 use alkanes_support::{
     context::Context,
-    parcel::{AlkaneTransfer, AlkaneTransferParcel},
+    parcel::{AlkaneTransfer},
     response::CallResponse,
 };
 use anyhow::{anyhow, Result};
-use bitcoin::hashes::hash160;
 use bitcoin::hashes::Hash;
-use bitcoin::secp256k1::PublicKey;
-use bitcoin::{Amount, OutPoint, Script, Transaction, TxOut};
+use bitcoin::key::TapTweak;
+use bitcoin::secp256k1::{self, XOnlyPublicKey};
+use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut};
 use metashrew_support::index_pointer::KeyValuePointer;
 use metashrew_support::{compat::to_arraybuffer_layout, utils::consensus_decode};
 use ordinals::{Artifact, Runestone};
 use protorune_support::{
-    network::{set_network, to_address_str, NetworkParams},
+    network::{set_network, NetworkParams},
     protostone::Protostone,
 };
 use std::sync::Arc;
@@ -36,15 +36,21 @@ use types_support::Payment;
 
 /// Default signer pubkey for testnet
 #[cfg(feature = "testnet")]
-pub const DEFAULT_SIGNER_PUBKEY: [u8; 33] = [
-    0x51, 0x20, 0x5d, 0xca, 0x26, 0x29, 0xf1, 0x8f, 0xf7, 0x95, 0x8d, 0x28, 0xce, 0xe1, 0xd6, 0xde,
-    0x2f, 0xf8, 0x7c, 0x39, 0xea, 0x11, 0x6e, 0xf3, 0x69, 0x2c, 0x5b, 0x2a, 0x55, 0x1d, 0x9f, 0xb1,
-    0xd1, // 33 bytes for compressed pubkey
+pub const DEFAULT_SIGNER_PUBKEY: [u8; 32] = [
+    0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43,
+    0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
+    0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5,
+    0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
 ];
 
 /// Default signer pubkey for all other networks (zeros)
 #[cfg(not(feature = "testnet"))]
-pub const DEFAULT_SIGNER_PUBKEY: [u8; 33] = [0; 33];
+pub const DEFAULT_SIGNER_PUBKEY: [u8; 32] = [
+    0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43,
+    0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
+    0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5,
+    0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
+];
 
 /// SyntheticBitcoin (frBTC) is a synthetic representation of Bitcoin on the Subfrost protocol.
 /// It allows users to wrap their BTC into frBTC and unwrap frBTC back to BTC.
@@ -67,31 +73,6 @@ impl AlkaneResponder for ContextHandle {}
 pub const CONTEXT: ContextHandle = ContextHandle(());
 
 /// Extension trait for Context to add transaction_id method
-trait ContextExt {
-    /// Get the transaction ID from the context
-    fn transaction_id(&self) -> Result<bitcoin::Txid>;
-}
-
-#[cfg(test)]
-impl ContextExt for Context {
-    fn transaction_id(&self) -> Result<bitcoin::Txid> {
-        // Test implementation with all zeros
-        Ok(bitcoin::Txid::from_slice(&[0; 32]).unwrap_or_else(|_| {
-            // This should never happen with a valid-length slice
-            panic!("Failed to create zero Txid")
-        }))
-    }
-}
-
-#[cfg(not(test))]
-impl ContextExt for Context {
-    fn transaction_id(&self) -> Result<bitcoin::Txid> {
-        Ok(
-            consensus_decode::<Transaction>(&mut std::io::Cursor::new(CONTEXT.transaction()))?
-                .compute_txid(),
-        )
-    }
-}
 
 #[derive(Default)]
 pub struct SyntheticBitcoin(());
@@ -114,11 +95,11 @@ enum SyntheticBitcoinMessage {
     },
 
     /// Wrap BTC to frBTC
-    #[opcode(2)]
+    #[opcode(77)]
     Wrap,
 
     /// Unwrap frBTC to BTC
-    #[opcode(3)]
+    #[opcode(78)]
     Unwrap {
         /// Output index in the transaction
         vout: u128,
@@ -133,7 +114,7 @@ enum SyntheticBitcoinMessage {
 
     /// Get the signer address
     #[opcode(103)]
-    #[returns(String)]
+    #[returns(Vec<u8>)]
     GetSigner,
 
     /// Get pending payments
@@ -312,21 +293,7 @@ impl SyntheticBitcoin {
         if stored_signer.len() > 0 {
             stored_signer.as_ref().clone()
         } else {
-            // Create a P2WPKH script from the default pubkey
-            let mut script = Vec::with_capacity(22); // 0x0014 + 20 bytes (hash160 of pubkey)
-
-            // Try to parse the pubkey and create a proper P2WPKH script
-            // If parsing fails, fall back to a zero script
-            let pubkey_hash = match PublicKey::from_slice(&DEFAULT_SIGNER_PUBKEY) {
-                Ok(pubkey) => hash160::Hash::hash(&pubkey.serialize()).to_byte_array(),
-                Err(_) => [0u8; 20], // Fallback to zeros if pubkey is invalid
-            };
-
-            script.push(0x00); // OP_0
-            script.push(0x14); // Push 20 bytes
-            script.extend_from_slice(&pubkey_hash);
-
-            script
+            DEFAULT_SIGNER_PUBKEY.to_vec()
         }
     }
 
@@ -402,9 +369,13 @@ impl SyntheticBitcoin {
     /// # Returns
     /// The total value sent to the signer
     fn compute_output(&self, tx: &Transaction) -> u128 {
-        let signer = self.signer();
+        let signer_pubkey_bytes = self.signer();
+        let signer_pubkey = XOnlyPublicKey::from_slice(&signer_pubkey_bytes).expect("Invalid x-only pubkey");
+        let secp = secp256k1::Secp256k1::new();
+        let (tweaked_pubkey, _) = signer_pubkey.tap_tweak(&secp, None);
+        let signer_script = ScriptBuf::new_p2tr_tweaked(tweaked_pubkey);
         let total = tx.output.iter().fold(0, |r: u128, v: &TxOut| -> u128 {
-            if v.script_pubkey.as_bytes().to_vec() == signer {
+            if v.script_pubkey == signer_script {
                 r + <u64 as Into<u128>>::into(v.value.to_sat())
             } else {
                 r
@@ -614,10 +585,7 @@ impl SyntheticBitcoin {
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes);
 
         // Always have a signer (either custom or default)
-        response.data = to_address_str(Script::from_bytes(&self.signer()))
-            .map_err(|_| anyhow!("invalid script"))?
-            .as_bytes()
-            .to_vec();
+        response.data = self.signer();
         Ok(response)
     }
 
@@ -690,3 +658,22 @@ impl SyntheticBitcoin {
 }
 
 // The __execute function is now handled by the declare_alkane! macro
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitcoin::secp256k1::{self, XOnlyPublicKey};
+    use bitcoin::Script;
+
+    #[test]
+    fn test_default_signer_pubkey() {
+        let contract = SyntheticBitcoin::default();
+        let signer_pubkey_bytes = contract.signer();
+
+        assert_eq!(
+            signer_pubkey_bytes,
+            DEFAULT_SIGNER_PUBKEY.to_vec(),
+            "The default signer should be the default pubkey"
+        );
+    }
+}
