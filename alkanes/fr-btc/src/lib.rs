@@ -82,10 +82,7 @@ pub struct SyntheticBitcoin(());
 enum SyntheticBitcoinMessage {
     /// Initialize the contract with auth tokens
     #[opcode(0)]
-    Initialize {
-        /// Initial auth token units
-        auth_token_units: u128,
-    },
+    Initialize,
 
     /// Set the signer script pubkey
     #[opcode(1)]
@@ -241,7 +238,11 @@ impl MintableToken for SyntheticBitcoin {}
 // First implement AlkaneResponder for SyntheticBitcoin
 impl AlkaneResponder for SyntheticBitcoin {}
 
-impl AuthenticatedResponder for SyntheticBitcoin {}
+impl AuthenticatedResponder for SyntheticBitcoin {
+  fn auth_token(&self) -> Result<AlkaneId> {
+    Ok(AlkaneId { block: 32, tx: 1 })
+  }
+}
 
 // Use the MessageDispatch macro for opcode handling
 declare_alkane! {
@@ -521,19 +522,14 @@ impl SyntheticBitcoin {
         payments
     }
     /// Initialize the contract with auth tokens
-    fn initialize(&self, auth_token_units: u128) -> Result<CallResponse> {
+    fn initialize(&self) -> Result<CallResponse> {
         configure_network();
         self.observe_initialization()?;
         // Create a context directly instead of using self.context()
         let context = self.context()?;
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes);
-        response
-            .alkanes
-            .0
-            .push(self.deploy_auth_token(auth_token_units)?);
         Ok(response)
     }
-
     /// Set the signer script pubkey
     fn set_signer(&self, vout: u128) -> Result<CallResponse> {
         configure_network();
