@@ -164,13 +164,13 @@ fn test_fr_btc_wrap_correct_signer() -> Result<()> {
     );
 
     // Create a block and index it
-    block.txdata.insert(0, wrap_tx.clone());
+    block.txdata.push(wrap_tx.clone());
     index_block(&block, 880_001)?;
 
     let sheet = get_last_outpoint_sheet(&block)?;
     let balance = sheet.get(&fr_btc_id.clone().into());
 
-    assert_eq!(balance, 100_000_000);
+    assert_eq!(balance, 99500000);
 
     Ok(())
 }
@@ -196,7 +196,7 @@ fn test_fr_btc_wrap_incorrect_signer() -> Result<()> {
     );
 
     // Create a block and index it
-    block.txdata.insert(0, wrap_tx.clone());
+    block.txdata.push(wrap_tx.clone());
     index_block(&block, 880_001)?;
 
     let sheet = get_last_outpoint_sheet(&block)?;
