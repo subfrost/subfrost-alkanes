@@ -138,17 +138,7 @@ pub fn create_alkane_tx_frbtc_signer_script(
     }
 }
 
-#[wasm_bindgen_test]
-fn test_fr_btc() -> Result<()> {
-    clear();
-    setup_fr_btc()?;
-    Ok(())
-}
-
-#[wasm_bindgen_test]
-fn test_fr_btc_wrap_correct_signer() -> Result<()> {
-    clear();
-    setup_fr_btc()?;
+fn wrap_btc() -> Result<()> {
     let fr_btc_id = AlkaneId { block: 4, tx: 0 };
     let mut block = create_block_with_coinbase_tx(880_001);
     let funding_outpoint = OutPoint {
@@ -174,6 +164,28 @@ fn test_fr_btc_wrap_correct_signer() -> Result<()> {
 
     Ok(())
 }
+
+#[wasm_bindgen_test]
+fn test_fr_btc() -> Result<()> {
+    clear();
+    setup_fr_btc()?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+fn test_fr_btc_wrap_correct_signer() -> Result<()> {
+    clear();
+    setup_fr_btc()?;
+    wrap_btc()
+}
+
+// #[wasm_bindgen_test]
+// fn test_fr_btc_unwrap() -> Result<()> {
+//     clear();
+//     let init_block = setup_fr_btc()?;
+//     wrap_btc()?;
+
+// }
 
 #[wasm_bindgen_test]
 fn test_fr_btc_wrap_incorrect_signer() -> Result<()> {
