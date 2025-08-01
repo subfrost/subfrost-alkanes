@@ -41,6 +41,7 @@ fn build_alkane(wasm_str: &str, features: Vec<&'static str>) -> Result<()> {
 }
 
 fn main() {
+    println!("cargo:rerun-if-changed=alkanes/");
     let env_var = env::var_os("OUT_DIR").unwrap();
     let base_dir = Path::new(&env_var)
         .parent()
@@ -85,11 +86,10 @@ fn main() {
     let files = mods
         .clone()
         .into_iter()
-        .filter_map(|name| {
-            Some(name)
-        })
+        .filter_map(|name| Some(name))
         .collect::<Vec<String>>();
-    files.into_iter()
+    files
+        .into_iter()
         .map(|v| -> Result<String> {
             std::env::set_current_dir(&crates_dir.clone().join(v.clone()))?;
             build_alkane(wasm_str, vec![])?;
@@ -104,20 +104,24 @@ fn main() {
                     .to_str()
                     .unwrap()
             );
-            let f: Vec<u8> = fs::read(
+            let file_path = Path::new(&wasm_str)
+                .join("wasm32-unknown-unknown")
+                .join("release")
+                .join(subbed.clone() + ".wasm");
+            let f: Vec<u8> = fs::read(&file_path)?;
+            let compressed: Vec<u8> = compress(f.clone())?;
+            fs::write(
                 &Path::new(&wasm_str)
                     .join("wasm32-unknown-unknown")
                     .join("release")
-                    .join(subbed.clone() + ".wasm"),
+                    .join(subbed.clone() + ".wasm.gz"),
+                &compressed,
             )?;
-            let compressed: Vec<u8> = compress(f.clone())?;
-            fs::write(&Path::new(&wasm_str).join("wasm32-unknown-unknown").join("release").join(subbed.clone() + ".wasm.gz"), &compressed)?;
-            let data: String = hex::encode(&f);
             fs::write(
                 &write_dir.join("std").join(subbed.clone() + "_build.rs"),
-                String::from("use hex_lit::hex;\n#[allow(long_running_const_eval)]\npub fn get_bytes() -> Vec<u8> { (&hex!(\"")
-                    + data.as_str()
-                    + "\")).to_vec() }",
+                String::from("pub fn get_bytes() -> Vec<u8> { include_bytes!(\"")
+                    + file_path.as_os_str().to_str().unwrap()
+                    + "\").to_vec() }",
             )?;
             eprintln!(
                 "build: {}",

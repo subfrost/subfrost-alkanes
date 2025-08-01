@@ -14,11 +14,7 @@ use alkanes_runtime::{
     stdio::{stdout, Write},
 };
 use alkanes_support::id::AlkaneId;
-use alkanes_support::{
-    context::Context,
-    parcel::{AlkaneTransfer},
-    response::CallResponse,
-};
+use alkanes_support::{context::Context, parcel::AlkaneTransfer, response::CallResponse};
 use anyhow::{anyhow, Result};
 use bitcoin::hashes::Hash;
 use bitcoin::key::TapTweak;
@@ -37,19 +33,15 @@ use types_support::Payment;
 /// Default signer pubkey for testnet
 #[cfg(feature = "testnet")]
 pub const DEFAULT_SIGNER_PUBKEY: [u8; 32] = [
-    0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43,
-    0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
-    0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5,
-    0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
+    0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43, 0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
+    0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5, 0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
 ];
 
 /// Default signer pubkey for all other networks (zeros)
 #[cfg(not(feature = "testnet"))]
 pub const DEFAULT_SIGNER_PUBKEY: [u8; 32] = [
-    0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43,
-    0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
-    0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5,
-    0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
+    0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43, 0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
+    0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5, 0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
 ];
 
 /// SyntheticBitcoin (frBTC) is a synthetic representation of Bitcoin on the Subfrost protocol.
@@ -239,9 +231,9 @@ impl MintableToken for SyntheticBitcoin {}
 impl AlkaneResponder for SyntheticBitcoin {}
 
 impl AuthenticatedResponder for SyntheticBitcoin {
-  fn auth_token(&self) -> Result<AlkaneId> {
-    Ok(AlkaneId { block: 32, tx: 1 })
-  }
+    fn auth_token(&self) -> Result<AlkaneId> {
+        Ok(AlkaneId { block: 32, tx: 1 })
+    }
 }
 
 // Use the MessageDispatch macro for opcode handling
@@ -371,7 +363,8 @@ impl SyntheticBitcoin {
     /// The total value sent to the signer
     fn compute_output(&self, tx: &Transaction) -> u128 {
         let signer_pubkey_bytes = self.signer();
-        let signer_pubkey = XOnlyPublicKey::from_slice(&signer_pubkey_bytes).expect("Invalid x-only pubkey");
+        let signer_pubkey =
+            XOnlyPublicKey::from_slice(&signer_pubkey_bytes).expect("Invalid x-only pubkey");
         let secp = secp256k1::Secp256k1::new();
         let (tweaked_pubkey, _) = signer_pubkey.tap_tweak(&secp, None);
         let signer_script = ScriptBuf::new_p2tr_tweaked(tweaked_pubkey);
@@ -525,9 +518,9 @@ impl SyntheticBitcoin {
     fn initialize(&self) -> Result<CallResponse> {
         configure_network();
         self.observe_initialization()?;
-        // Create a context directly instead of using self.context()
         let context = self.context()?;
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes);
+        response.alkanes.0.push(self.deploy_auth_token(5)?);
         Ok(response)
     }
     /// Set the signer script pubkey
