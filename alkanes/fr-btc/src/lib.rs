@@ -4,7 +4,7 @@
 //! It allows users to wrap their BTC into frBTC and unwrap frBTC back to BTC.
 //! The contract verifies Bitcoin transactions to ensure proper wrapping and unwrapping.
 
-use alkanes_runtime::{auth::AuthenticatedResponder, token::Token};
+use alkanes_runtime::auth::AuthenticatedResponder;
 use alkanes_runtime::{
     declare_alkane, message::MessageDispatch, runtime::AlkaneResponder, storage::StoragePointer,
 };
@@ -13,6 +13,7 @@ use alkanes_runtime::{
     println,
     stdio::{stdout, Write},
 };
+use alkanes_std_factory_support::MintableToken;
 use alkanes_support::id::AlkaneId;
 use alkanes_support::{context::Context, parcel::AlkaneTransfer, response::CallResponse};
 use anyhow::{anyhow, Result};
@@ -43,26 +44,6 @@ pub const DEFAULT_SIGNER_PUBKEY: [u8; 32] = [
     0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43, 0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
     0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5, 0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
 ];
-
-/// SyntheticBitcoin (frBTC) is a synthetic representation of Bitcoin on the Subfrost protocol.
-/// It allows users to wrap their BTC into frBTC and unwrap frBTC back to BTC.
-/// The contract verifies Bitcoin transactions to ensure proper wrapping and unwrapping.
-/// Context handle for accessing transaction data
-pub struct ContextHandle(());
-
-#[cfg(test)]
-impl ContextHandle {
-    /// Get the current transaction bytes
-    pub fn transaction(&self) -> Vec<u8> {
-        // This is a placeholder implementation that would normally
-        // access the transaction from the runtime context
-        Vec::new()
-    }
-}
-
-impl AlkaneResponder for ContextHandle {}
-
-pub const CONTEXT: ContextHandle = ContextHandle(());
 
 /// Extension trait for Context to add transaction_id method
 
@@ -120,6 +101,10 @@ enum SyntheticBitcoinMessage {
     #[opcode(100)]
     #[returns(String)]
     GetSymbol,
+
+    #[opcode(101)]
+    #[returns(u128)]
+    GetTotalSupply,
 
     /// Get token decimals
     #[opcode(102)]
@@ -189,34 +174,6 @@ pub fn configure_network() {
         p2pkh_hash: 0x19,
         p2sh_hash: 0x1e,
     });
-}
-
-/// MintableToken is a trait for tokens that can be minted.
-/// It extends the Token trait and adds a mint function.
-pub trait MintableToken: Token {
-    /// Mint new tokens and return an AlkaneTransfer.
-    ///
-    /// # Arguments
-    /// * `context` - The context of the call
-    /// * `value` - The amount of tokens to mint
-    ///
-    /// # Returns
-    /// An AlkaneTransfer representing the minted tokens
-    fn mint(&self, context: &Context, value: u128) -> AlkaneTransfer {
-        AlkaneTransfer {
-            id: context.myself.clone(),
-            value,
-        }
-    }
-}
-
-impl Token for SyntheticBitcoin {
-    fn name(&self) -> String {
-        String::from("SUBFROST BTC")
-    }
-    fn symbol(&self) -> String {
-        String::from("frBTC")
-    }
 }
 
 /// Add decimals as a regular method, not part of the Token trait
@@ -299,7 +256,7 @@ impl SyntheticBitcoin {
     /// Result indicating success or failure
     fn set_signer_internal(&self, context: &Context, _vout: u128) -> Result<()> {
         let vout = _vout as usize;
-        let tx = consensus_decode::<Transaction>(&mut std::io::Cursor::new(CONTEXT.transaction()))?;
+        let tx = consensus_decode::<Transaction>(&mut std::io::Cursor::new(self.transaction()))?;
 
         if let Some(Artifact::Runestone(ref runestone)) = Runestone::decipher(&tx) {
             let protostones = Protostone::from_runestone(runestone)?;
@@ -409,7 +366,7 @@ impl SyntheticBitcoin {
     /// # Returns
     /// The amount of frBTC burned
     fn burn(&self, context: &Context, vout: usize) -> Result<u64> {
-        let tx = consensus_decode::<Transaction>(&mut std::io::Cursor::new(CONTEXT.transaction()))?;
+        let tx = consensus_decode::<Transaction>(&mut std::io::Cursor::new(self.transaction()))?;
         let txid = tx.compute_txid();
 
         if let Some(Artifact::Runestone(ref runestone)) = Runestone::decipher(&tx) {
@@ -473,7 +430,7 @@ impl SyntheticBitcoin {
     /// # Returns
     /// An AlkaneTransfer representing the minted frBTC
     fn exchange(&self, context: &Context) -> Result<AlkaneTransfer> {
-        let tx = consensus_decode::<Transaction>(&mut std::io::Cursor::new(CONTEXT.transaction()))?;
+        let tx = consensus_decode::<Transaction>(&mut std::io::Cursor::new(self.transaction()))?;
 
         // Check if the transaction has already been processed
         self.observe_transaction(&tx)?;
@@ -493,8 +450,9 @@ impl SyntheticBitcoin {
         };
 
         // Mint frBTC tokens with adjusted payout
-        let transfer = self.mint(&context, adjusted_payout);
+        let transfer = self.mint(&context, adjusted_payout)?;
 
+        println!("transfer {:?}", transfer);
         Ok(transfer)
     }
 
@@ -521,6 +479,7 @@ impl SyntheticBitcoin {
         let context = self.context()?;
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes);
         response.alkanes.0.push(self.deploy_auth_token(5)?);
+        self.set_name_and_symbol_str("SUBFROST BTC".to_string(), "frBTC".to_string());
         Ok(response)
     }
     /// Set the signer script pubkey
@@ -602,6 +561,15 @@ impl SyntheticBitcoin {
         let context = self.context()?;
         let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes);
         response.data = self.symbol().into_bytes().to_vec();
+        Ok(response)
+    }
+
+    fn get_total_supply(&self) -> Result<CallResponse> {
+        let context = self.context()?;
+        let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes.clone());
+
+        response.data = self.total_supply().to_le_bytes().to_vec();
+
         Ok(response)
     }
 
