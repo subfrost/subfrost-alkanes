@@ -1,0 +1,32 @@
+name: Rust
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-config:
+          - name: "WASM Tests"
+            command: "cargo test --target wasm32-unknown-unknown"
+      fail-fast: false # Allows all tests to run even if one fails
+
+    name: ${{ matrix.test-config.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install test runner
+        run: cargo install wasm-bindgen-cli --version 0.2.100
+      - name: ${{ matrix.test-config.name }}
+        run: ${{ matrix.test-config.command }}

@@ -795,6 +795,7 @@ name = "fr-btc"
 version = "0.1.0"
 dependencies = [
  "alkanes-runtime",
+ "alkanes-std-factory-support",
  "alkanes-support",
  "anyhow",
  "bitcoin 0.32.6",

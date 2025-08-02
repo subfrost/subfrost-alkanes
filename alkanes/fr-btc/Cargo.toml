@@ -21,6 +21,7 @@ alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
 metashrew-support = { git = "https://github.com/sandshrewmetaprotocols/metashrew" }
 protorune-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
+alkanes-std-factory-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 types-support = { path = "../../crates/types-support" }
 anyhow = "1.0.94"
 bitcoin = { version = "0.32.5", features = ["rand"] }
