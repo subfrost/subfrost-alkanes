@@ -176,6 +176,21 @@ pub fn configure_network() {
     });
 }
 
+#[cfg(all(
+    not(feature = "mainnet"),
+    not(feature = "testnet"),
+    not(feature = "luckycoin"),
+    not(feature = "dogecoin"),
+    not(feature = "bellscoin")
+))]
+pub fn get_auth_token() -> AlkaneId {
+    AlkaneId { block: 4, tx: 123 }
+}
+#[cfg(feature = "mainnet")]
+pub fn get_auth_token() -> AlkaneId {
+    AlkaneId { block: 32, tx: 1 }
+}
+
 /// Add decimals as a regular method, not part of the Token trait
 impl SyntheticBitcoin {
     fn decimals(&self) -> u8 {
@@ -472,13 +487,14 @@ impl SyntheticBitcoin {
             });
         payments
     }
+
     /// Initialize the contract with auth tokens
     fn initialize(&self) -> Result<CallResponse> {
         configure_network();
         self.observe_initialization()?;
         let context = self.context()?;
-        let mut response: CallResponse = CallResponse::forward(&context.incoming_alkanes);
-        response.alkanes.0.push(self.deploy_auth_token(5)?);
+        let response: CallResponse = CallResponse::forward(&context.incoming_alkanes);
+        self.set_auth_token(get_auth_token())?;
         self.set_name_and_symbol_str("SUBFROST BTC".to_string(), "frBTC".to_string());
         Ok(response)
     }
