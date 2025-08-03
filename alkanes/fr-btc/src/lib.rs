@@ -429,7 +429,7 @@ impl SyntheticBitcoin {
             };
             // Store the payment record
             StoragePointer::from_keyword("/payments/byheight/")
-                .select_value(0u64) // Use a fixed height for now
+                .select_value(self.height())
                 .append(Arc::<Vec<u8>>::new(payment.serialize()?));
             Ok(value)
         } else {
@@ -476,7 +476,7 @@ impl SyntheticBitcoin {
     /// A vector of serialized Payment objects
     fn get_pending_payments_internal(&self) -> Vec<u8> {
         let payments = StoragePointer::from_keyword("/payments/byheight/")
-            .select_value(0u64) // Use a fixed height for now
+            .select_value(self.height())
             .get_list()
             .into_iter()
             .fold(Vec::<u8>::new(), |r, v| {
