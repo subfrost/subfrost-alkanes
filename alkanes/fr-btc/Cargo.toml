@@ -14,9 +14,11 @@ luckycoin = []
 bellscoin = []
 fractal = []
 mainnet = []
+test-hooks = []
 
 
 [dependencies]
+fr-btc-support = { path = "../../crates/fr-btc-support" }
 alkanes-support = { git = "https://github.com/kungfuflex/alkanes-rs" }
 alkanes-runtime = { git = "https://github.com/kungfuflex/alkanes-rs" }
 metashrew-support = { git = "https://github.com/sandshrewmetaprotocols/metashrew" }

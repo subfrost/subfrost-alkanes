@@ -30,20 +30,7 @@ use protorune_support::{
 };
 use std::sync::Arc;
 use types_support::Payment;
-
-/// Default signer pubkey for testnet
-#[cfg(feature = "testnet")]
-pub const DEFAULT_SIGNER_PUBKEY: [u8; 32] = [
-    0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43, 0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
-    0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5, 0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
-];
-
-/// Default signer pubkey for all other networks (zeros)
-#[cfg(not(feature = "testnet"))]
-pub const DEFAULT_SIGNER_PUBKEY: [u8; 32] = [
-    0x07, 0x9a, 0x54, 0xd0, 0xae, 0xf2, 0xb3, 0x43, 0xaa, 0xc8, 0x9c, 0x0f, 0xd7, 0x89, 0xaa, 0xb4,
-    0xac, 0xb9, 0x1f, 0x00, 0xca, 0xa0, 0xf8, 0xd5, 0x15, 0x01, 0x45, 0x2c, 0xe4, 0x7c, 0xc9, 0x7d,
-];
+use fr_btc_support::DEFAULT_SIGNER_PUBKEY;
 
 /// Extension trait for Context to add transaction_id method
 
@@ -115,6 +102,15 @@ enum SyntheticBitcoinMessage {
     #[opcode(104)]
     #[returns(u128)]
     GetPremium,
+
+    /// Set the signer address for testing purposes
+    #[cfg(feature = "test-hooks")]
+    #[opcode(666)]
+    SetSignerAddressForTest {
+        part1: u128,
+        part2: u128,
+        part3: u128,
+    },
 }
 
 /// Configure the network parameters for the Bitcoin network.
@@ -181,15 +177,23 @@ pub fn configure_network() {
     not(feature = "testnet"),
     not(feature = "luckycoin"),
     not(feature = "dogecoin"),
-    not(feature = "bellscoin")
+    not(feature = "bellscoin"),
+    not(feature = "test-hooks")
 ))]
 pub fn get_auth_token() -> AlkaneId {
     AlkaneId { block: 4, tx: 123 }
 }
-#[cfg(feature = "mainnet")]
+
+#[cfg(all(feature = "mainnet", not(feature = "test-hooks")))]
 pub fn get_auth_token() -> AlkaneId {
     AlkaneId { block: 32, tx: 1 }
 }
+
+#[cfg(feature = "test-hooks")]
+pub fn get_auth_token() -> AlkaneId {
+    AlkaneId { block: 4, tx: 1 }
+}
+
 
 /// Add decimals as a regular method, not part of the Token trait
 impl SyntheticBitcoin {
@@ -204,7 +208,7 @@ impl AlkaneResponder for SyntheticBitcoin {}
 
 impl AuthenticatedResponder for SyntheticBitcoin {
     fn auth_token(&self) -> Result<AlkaneId> {
-        Ok(AlkaneId { block: 32, tx: 1 })
+        Ok(get_auth_token())
     }
 }
 
@@ -627,6 +631,26 @@ impl SyntheticBitcoin {
         response.data = premium.to_le_bytes().to_vec();
 
         Ok(response)
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn set_signer_address_for_test(
+        &self,
+        part1: u128,
+        part2: u128,
+        part3: u128,
+    ) -> Result<CallResponse> {
+        let mut address = [0u8; 32];
+        let p1_bytes = part1.to_le_bytes();
+        let p2_bytes = part2.to_le_bytes();
+        let p3_bytes = part3.to_le_bytes();
+
+        address[0..12].copy_from_slice(&p1_bytes[0..12]);
+        address[12..24].copy_from_slice(&p2_bytes[0..12]);
+        address[24..32].copy_from_slice(&p3_bytes[0..8]);
+
+        self.signer_pointer().set(Arc::new(address.to_vec()));
+        Ok(CallResponse::default())
     }
 }
 
