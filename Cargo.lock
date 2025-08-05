@@ -799,11 +799,16 @@ dependencies = [
  "alkanes-support",
  "anyhow",
  "bitcoin 0.32.6",
+ "fr-btc-support",
  "metashrew-support",
  "ordinals 0.5.2",
  "protorune-support",
  "types-support",
 ]
+
+[[package]]
+name = "fr-btc-support"
+version = "0.1.0"
 
 [[package]]
 name = "fr-sigil"
