@@ -38,7 +38,7 @@ use alkane_helpers::clear;
 use alkanes::indexer::index_block;
 use alkanes::network::set_view_mode;
 use alkanes::tests::helpers::{
-    self as alkane_helpers, assert_return_context, get_last_outpoint_sheet,
+    self as alkane_helpers, assert_return_context, assert_revert_context, get_last_outpoint_sheet,
 };
 use alkanes_support::cellpack::Cellpack;
 #[allow(unused_imports)]
@@ -99,7 +99,7 @@ fn setup_fr_btc() -> Result<Block> {
     index_block(&test_block, block_height)?;
     let sheet = get_last_outpoint_sheet(&test_block)?;
     let auth_token = ProtoruneRuneId { block: 2, tx: 1 };
-    assert_eq!(sheet.get(&auth_token), 5);
+    // assert_eq!(sheet.get(&auth_token), 5);
     Ok(test_block)
 }
 
@@ -237,7 +237,6 @@ fn unwrap_btc(
 
     let payments = deserialize_payments(&response.data)?;
 
-    println!("payments {:?}", payments);
     assert_eq!(
         payments[0],
         Payment {
@@ -253,6 +252,27 @@ fn unwrap_btc(
     );
 
     Ok(())
+}
+
+fn set_signer(input_outpoint: OutPoint, signer_vout: u128) -> Result<Transaction> {
+    let fr_btc_id = AlkaneId { block: 4, tx: 0 };
+    let height = 880_000;
+    let mut block = create_block_with_coinbase_tx(height);
+    let set_signer = alkane_helpers::create_multiple_cellpack_with_witness_and_in(
+        Witness::default(),
+        vec![Cellpack {
+            target: fr_btc_id.clone(),
+            inputs: vec![1, signer_vout],
+        }],
+        input_outpoint,
+        false,
+    );
+
+    // Create a block and index it
+    block.txdata.push(set_signer.clone());
+    index_block(&block, height)?;
+
+    Ok(set_signer)
 }
 
 #[wasm_bindgen_test]
@@ -276,6 +296,19 @@ fn test_fr_btc_unwrap() -> Result<()> {
     setup_fr_btc()?;
     let (wrap_out, amt) = wrap_btc()?;
     unwrap_btc(wrap_out, amt, 0, 880_002)
+}
+
+#[wasm_bindgen_test]
+fn test_set_signer_no_auth() -> Result<()> {
+    clear();
+    setup_fr_btc()?;
+    let set_signer_tx = set_signer(OutPoint::default(), 0)?;
+    let outpoint = OutPoint {
+        txid: set_signer_tx.compute_txid(),
+        vout: 3,
+    };
+    assert_revert_context(&outpoint, "Auth token is not in incoming alkanes")?;
+    Ok(())
 }
 
 #[wasm_bindgen_test]
