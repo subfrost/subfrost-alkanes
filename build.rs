@@ -14,8 +14,8 @@ fn compress(binary: Vec<u8>) -> Result<Vec<u8>> {
     Ok(writer.finish()?)
 }
 
-fn build_alkane(wasm_str: &str, features: Vec<&'static str>) -> Result<()> {
-    if features.len() != 0 {
+fn build_alkane(wasm_str: &str, features: Vec<String>) -> Result<()> {
+    if !features.is_empty() {
         let _ = Command::new("cargo")
             .env("CARGO_TARGET_DIR", wasm_str)
             .arg("build")
@@ -88,11 +88,17 @@ fn main() {
         .into_iter()
         .filter_map(|name| Some(name))
         .collect::<Vec<String>>();
+    let features: Vec<String> = env::vars()
+        .filter_map(|(key, _)| {
+            key.strip_prefix("CARGO_FEATURE_")
+                .map(|s| s.to_lowercase().replace('_', "-"))
+        })
+        .collect();
     files
         .into_iter()
         .map(|v| -> Result<String> {
             std::env::set_current_dir(&crates_dir.clone().join(v.clone()))?;
-            build_alkane(wasm_str, vec![])?;
+            build_alkane(wasm_str, features.clone())?;
             std::env::set_current_dir(&crates_dir)?;
             let subbed = v.clone().replace("-", "_");
             eprintln!(
