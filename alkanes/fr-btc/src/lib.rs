@@ -405,18 +405,20 @@ impl SyntheticBitcoin {
                 return Err(anyhow!("pointer cannot be a protomessage"));
             }
 
-            if pointer as usize == vout {
-                return Err(anyhow!(
-                    "pointer cannot be equal to output spendable by synthetic"
-                ));
-            }
+            // REVIEW: WHY IS THIS NOT ALLOWED? the output will not have any alkanes anyways
+            // if pointer as usize == vout {
+            //     return Err(anyhow!(
+            //         "pointer cannot be equal to output spendable by synthetic"
+            //     ));
+            // }
 
-            let signer = self.signer();
-            if signer != tx.output[vout].script_pubkey.as_bytes().to_vec() {
-                return Err(anyhow!(
-                    "signer pubkey must be targeted with supplementary output"
-                ));
-            }
+            // REVIEW: WHY IS THIS NOT ALLOWED? the signer doesn't need to receive anything for an unwrap
+            // let signer = self.signer();
+            // if signer != tx.output[vout].script_pubkey.as_bytes().to_vec() {
+            //     return Err(anyhow!(
+            //         "signer pubkey must be targeted with supplementary output"
+            //     ));
+            // }
 
             let value = self.burn_input(context)?;
 
@@ -433,7 +435,7 @@ impl SyntheticBitcoin {
             };
             // Store the payment record
             StoragePointer::from_keyword("/payments/byheight/")
-                .select_value(0u64) // Use a fixed height for now
+                .select_value(self.height())
                 .append(Arc::<Vec<u8>>::new(payment.serialize()?));
             Ok(value)
         } else {
@@ -480,7 +482,7 @@ impl SyntheticBitcoin {
     /// A vector of serialized Payment objects
     fn get_pending_payments_internal(&self) -> Vec<u8> {
         let payments = StoragePointer::from_keyword("/payments/byheight/")
-            .select_value(0u64) // Use a fixed height for now
+            .select_value(self.height())
             .get_list()
             .into_iter()
             .fold(Vec::<u8>::new(), |r, v| {

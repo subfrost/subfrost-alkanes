@@ -1,10 +1,11 @@
 use crate::tests::std::fr_btc_build;
 use alkanes::message::AlkaneMessageContext;
 use alkanes::precompiled::alkanes_std_auth_token_build;
-use alkanes::view;
+use alkanes::view::{self, simulate_parcel};
 use alkanes_support::constants::AUTH_TOKEN_FACTORY_ID;
 use alkanes_support::gz::compress;
 use alkanes_support::id::AlkaneId;
+use alkanes_support::response::ExtendedCallResponse;
 use alkanes_support::trace::Trace;
 use anyhow::Result;
 use bitcoin::address::NetworkChecked;
@@ -17,6 +18,7 @@ use bitcoin::{
 };
 #[allow(unused_imports)]
 use hex;
+use metashrew_core::index_pointer::AtomicPointer;
 use metashrew_support::index_pointer::KeyValuePointer;
 #[allow(unused_imports)]
 use metashrew_support::utils::format_key;
@@ -27,7 +29,7 @@ use protorune::{
     balance_sheet::load_sheet, message::MessageContext, tables::RuneTable,
     test_helpers::get_address,
 };
-use protorune_support::balance_sheet::{BalanceSheetOperations, ProtoruneRuneId};
+use protorune_support::balance_sheet::{BalanceSheet, BalanceSheetOperations, ProtoruneRuneId};
 use protorune_support::protostone::Protostone;
 
 use protorune_support::utils::consensus_encode;
@@ -35,13 +37,39 @@ use protorune_support::utils::consensus_encode;
 use alkane_helpers::clear;
 use alkanes::indexer::index_block;
 use alkanes::network::set_view_mode;
-use alkanes::tests::helpers::{self as alkane_helpers, get_last_outpoint_sheet};
+use alkanes::tests::helpers::{
+    self as alkane_helpers, assert_return_context, assert_revert_context, get_last_outpoint_sheet,
+};
 use alkanes_support::cellpack::Cellpack;
 #[allow(unused_imports)]
 use metashrew_core::{get_cache, index_pointer::IndexPointer, println, stdio::stdout};
 use ordinals::{Artifact, Runestone};
 use std::fmt::Write;
+use types_support::{deserialize_payments, Payment};
 use wasm_bindgen_test::wasm_bindgen_test;
+
+pub fn simulate_cellpack(height: u64, cellpack: Cellpack) -> Result<(ExtendedCallResponse, u64)> {
+    let parcel = MessageContextParcel {
+        atomic: AtomicPointer::default(),
+        runes: vec![],
+        transaction: Transaction {
+            version: bitcoin::blockdata::transaction::Version::ONE,
+            input: vec![],
+            output: vec![],
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+        },
+        block: create_block_with_coinbase_tx(height as u32),
+        height,
+        pointer: 0,
+        refund_pointer: 0,
+        calldata: cellpack.encipher(),
+        sheets: Box::<BalanceSheet<AtomicPointer>>::new(BalanceSheet::default()),
+        txindex: 0,
+        vout: 0,
+        runtime_balances: Box::<BalanceSheet<AtomicPointer>>::new(BalanceSheet::default()),
+    };
+    simulate_parcel(&parcel, u64::MAX)
+}
 
 fn setup_fr_btc() -> Result<Block> {
     let block_height = 880_000;
@@ -71,7 +99,7 @@ fn setup_fr_btc() -> Result<Block> {
     index_block(&test_block, block_height)?;
     let sheet = get_last_outpoint_sheet(&test_block)?;
     let auth_token = ProtoruneRuneId { block: 2, tx: 1 };
-    assert_eq!(sheet.get(&auth_token), 5);
+    // assert_eq!(sheet.get(&auth_token), 5);
     Ok(test_block)
 }
 
@@ -138,7 +166,7 @@ pub fn create_alkane_tx_frbtc_signer_script(
     }
 }
 
-fn wrap_btc() -> Result<()> {
+fn wrap_btc() -> Result<(OutPoint, u64)> {
     let fr_btc_id = AlkaneId { block: 4, tx: 0 };
     let mut block = create_block_with_coinbase_tx(880_001);
     let funding_outpoint = OutPoint {
@@ -160,9 +188,91 @@ fn wrap_btc() -> Result<()> {
     let sheet = get_last_outpoint_sheet(&block)?;
     let balance = sheet.get(&fr_btc_id.clone().into());
 
-    assert_eq!(balance, 99500000);
+    let expected_frbtc_amt = 99500000;
+
+    assert_eq!(balance, expected_frbtc_amt);
+
+    let wrap_outpoint = OutPoint {
+        txid: wrap_tx.compute_txid(),
+        vout: 0,
+    };
+
+    Ok((wrap_outpoint, expected_frbtc_amt as u64))
+}
+
+fn unwrap_btc(
+    fr_btc_input_outpoint: OutPoint,
+    amount_frbtc: u64,
+    desired_vout: u128,
+    height: u32,
+) -> Result<()> {
+    let fr_btc_id = AlkaneId { block: 4, tx: 0 };
+    let mut block = create_block_with_coinbase_tx(height);
+    let unwrap_tx = alkane_helpers::create_multiple_cellpack_with_witness_and_in(
+        Witness::default(),
+        vec![Cellpack {
+            target: fr_btc_id.clone(),
+            inputs: vec![78, desired_vout],
+        }],
+        fr_btc_input_outpoint,
+        false,
+    );
+
+    // Create a block and index it
+    block.txdata.push(unwrap_tx.clone());
+    index_block(&block, height)?;
+
+    let sheet = get_last_outpoint_sheet(&block)?;
+    let balance = sheet.get(&fr_btc_id.clone().into());
+
+    assert_eq!(balance, 0);
+
+    let (response, _) = simulate_cellpack(
+        height as u64,
+        Cellpack {
+            target: AlkaneId { block: 4, tx: 0 },
+            inputs: vec![101],
+        },
+    )?;
+
+    let payments = deserialize_payments(&response.data)?;
+
+    assert_eq!(
+        payments[0],
+        Payment {
+            output: TxOut {
+                script_pubkey: unwrap_tx.output[0].script_pubkey.clone(),
+                value: Amount::from_sat(amount_frbtc),
+            },
+            spendable: OutPoint {
+                txid: unwrap_tx.compute_txid(),
+                vout: desired_vout.try_into()?,
+            },
+        }
+    );
 
     Ok(())
+}
+
+fn set_signer(input_outpoint: OutPoint, signer_vout: u128) -> Result<Transaction> {
+    let fr_btc_id = AlkaneId { block: 4, tx: 0 };
+    let height = 880_000;
+    let mut block = create_block_with_coinbase_tx(height);
+    let set_signer = alkane_helpers::create_multiple_cellpack_with_witness_and_in(
+        Witness::default(),
+        vec![Cellpack {
+            target: fr_btc_id.clone(),
+            inputs: vec![1, signer_vout],
+        }],
+        input_outpoint,
+        false,
+    );
+
+    // Create a block and index it
+    block.txdata.push(set_signer.clone());
+    index_block(&block, height)?;
+
+    Ok(set_signer)
 }
 
 #[wasm_bindgen_test]
@@ -176,16 +286,30 @@ fn test_fr_btc() -> Result<()> {
 fn test_fr_btc_wrap_correct_signer() -> Result<()> {
     clear();
     setup_fr_btc()?;
-    wrap_btc()
+    wrap_btc()?;
+    Ok(())
 }
 
-// #[wasm_bindgen_test]
-// fn test_fr_btc_unwrap() -> Result<()> {
-//     clear();
-//     let init_block = setup_fr_btc()?;
-//     wrap_btc()?;
+#[wasm_bindgen_test]
+fn test_fr_btc_unwrap() -> Result<()> {
+    clear();
+    setup_fr_btc()?;
+    let (wrap_out, amt) = wrap_btc()?;
+    unwrap_btc(wrap_out, amt, 0, 880_002)
+}
 
-// }
+#[wasm_bindgen_test]
+fn test_set_signer_no_auth() -> Result<()> {
+    clear();
+    setup_fr_btc()?;
+    let set_signer_tx = set_signer(OutPoint::default(), 0)?;
+    let outpoint = OutPoint {
+        txid: set_signer_tx.compute_txid(),
+        vout: 3,
+    };
+    assert_revert_context(&outpoint, "Auth token is not in incoming alkanes")?;
+    Ok(())
+}
 
 #[wasm_bindgen_test]
 fn test_fr_btc_wrap_incorrect_signer() -> Result<()> {

@@ -2026,6 +2026,7 @@ dependencies = [
  "protorune",
  "protorune-support",
  "ruint",
+ "types-support",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
