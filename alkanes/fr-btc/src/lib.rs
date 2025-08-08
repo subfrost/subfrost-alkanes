@@ -345,6 +345,7 @@ impl SyntheticBitcoin {
         let (tweaked_pubkey, _) = signer_pubkey.tap_tweak(&secp, None);
         let signer_script = ScriptBuf::new_p2tr_tweaked(tweaked_pubkey);
         let total = tx.output.iter().fold(0, |r: u128, v: &TxOut| -> u128 {
+            println!("(v.script_pubkey, signer_script) = (({}), ({}))", v.script_pubkey.clone(), signer_script.clone());
             if v.script_pubkey == signer_script {
                 r + <u64 as Into<u128>>::into(v.value.to_sat())
             } else {
@@ -434,6 +435,7 @@ impl SyntheticBitcoin {
                 },
             };
             // Store the payment record
+            println!("/payments/byheight/{}", self.height());
             StoragePointer::from_keyword("/payments/byheight/")
                 .select_value(self.height())
                 .append(Arc::<Vec<u8>>::new(payment.serialize()?));
@@ -481,6 +483,7 @@ impl SyntheticBitcoin {
     /// # Returns
     /// A vector of serialized Payment objects
     fn get_pending_payments_internal(&self) -> Vec<u8> {
+        println!("/payments/byheight/{}", self.height());
         let payments = StoragePointer::from_keyword("/payments/byheight/")
             .select_value(self.height())
             .get_list()
@@ -535,6 +538,7 @@ impl SyntheticBitcoin {
             return Err(anyhow!("must be called by EOA"));
         }
 
+        println!("incoming_alkanes length: {}", context.incoming_alkanes.0.len());
         if context.incoming_alkanes.0.len() != 1
             || context.incoming_alkanes.0[0].id != context.myself
         {
@@ -545,6 +549,7 @@ impl SyntheticBitcoin {
 
         let mut burn_response = CallResponse::default();
         burn_response.data = burn_value.to_le_bytes().to_vec();
+        println!("burn_value: {}", burn_value);
         Ok(burn_response)
     }
 
